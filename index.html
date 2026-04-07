@@ -391,7 +391,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
       <textarea class="chat-ta" id="chatTa" placeholder="Stel een vraag..." rows="1"></textarea>
       <button class="chat-send" id="chatSend">➤</button>
     </div>
-    <div class="chat-hint">CKPS → localhost:3800</div>
+    <div class="chat-hint">CKPS → ckps.hafworld.com</div>
   </div>
 </div>
 
@@ -422,15 +422,8 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 'use strict';
 
 // ── CONSTANTS ──
-const CKPS = 'http://localhost:3800/v1/messages';
-function getAgentToken(){
-  let t = localStorage.getItem('haf_agent_token');
-  if (!t) {
-    t = prompt('CKPS agent token (x-agent-token):\nWordt alleen lokaal in localStorage opgeslagen.');
-    if (t) localStorage.setItem('haf_agent_token', t.trim());
-  }
-  return t;
-}
+const CKPS = 'https://ckps.hafworld.com/v1/messages';
+const CKPS_KEY = 'CKPS_KEY_PLACEHOLDER';
 const MODEL = 'claude-opus-4-6';
 const STORE = 'haf_proj_v2';
 
@@ -971,7 +964,7 @@ async function sendMsg() {
   try {
     const resp = await fetch(CKPS, {
       method: 'POST',
-      headers: {'Content-Type':'application/json', 'x-agent-token':getAgentToken()||'', 'anthropic-version':'2023-06-01'},
+      headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+CKPS_KEY, 'anthropic-version':'2023-06-01'},
       body: JSON.stringify({model:MODEL, max_tokens:1024, system:buildSysPrompt(), messages:chatHistory.slice(-12)})
     });
     if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error?.message || 'HTTP ' + resp.status); }
@@ -982,7 +975,7 @@ async function sendMsg() {
     el.innerHTML = md(reply);
   } catch(err) {
     el.classList.remove('loading');
-    el.innerHTML = '<span style="color:#ef4444">⚠ ' + (err.message.includes('fetch') ? 'CKPS niet bereikbaar — start localhost:3800' : esc(err.message)) + '</span>';
+    el.innerHTML = '<span style="color:#ef4444">⚠ ' + (err.message.includes('fetch') ? 'CKPS niet bereikbaar' : esc(err.message)) + '</span>';
   }
   chatLoading = false;
   document.getElementById('chatSend').disabled = false;
