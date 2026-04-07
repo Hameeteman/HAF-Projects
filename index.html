@@ -1,0 +1,1182 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HAF Projects</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f7f7fb; --s1:#ffffff; --s2:#f1f1f7; --s3:#e8e8f0; --s4:#dcdce8;
+  --b1:#e4e4ee; --b2:#c8c8d8; --b3:#9898b8;
+  --t1:#14141f; --t2:#4a4a66; --t3:#7878a0; --t4:#a8a8c0;
+  --ci:#f59e0b; --ci-bg:rgba(245,158,11,.1);
+  --co:#3b82f6; --co-bg:rgba(59,130,246,.1);
+  --cp:#a855f7; --cp-bg:rgba(168,85,247,.1);
+  --ca:#10b981; --ca-bg:rgba(16,185,129,.1);
+  --cv:#f97316; --cv-bg:rgba(249,115,22,.1);
+  --cad:#06b6d4; --cad-bg:rgba(6,182,212,.1);
+  --red:#ef4444; --red-bg:rgba(239,68,68,.12);
+  --amber:#f59e0b; --amber-bg:rgba(245,158,11,.12);
+  --green:#10b981; --green-bg:rgba(16,185,129,.12);
+  --r:10px; --rs:6px; --rx:14px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;overflow:hidden;}
+body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;}
+::-webkit-scrollbar{width:4px;height:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:var(--b2);border-radius:2px;}
+.app{display:flex;flex-direction:column;height:100vh;}
+
+/* TOPBAR */
+.topbar{height:52px;flex-shrink:0;background:rgba(255,255,255,.92);backdrop-filter:blur(16px);border-bottom:1px solid var(--b1);display:flex;align-items:center;padding:0 18px;gap:10px;position:relative;z-index:60;}
+.logo{font-size:14px;font-weight:800;letter-spacing:.1em;white-space:nowrap;}
+.logo-accent{background:linear-gradient(120deg,var(--ci),var(--cad));-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.sep{width:1px;height:18px;background:var(--b1);}
+.breadcrumb{display:flex;align-items:center;gap:5px;font-size:12px;color:var(--t3);}
+.bc-proj{color:var(--t1);font-weight:500;}
+.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px;}
+.search-wrap{position:relative;}
+.search-input{width:200px;height:30px;padding:0 10px 0 28px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:12px;outline:none;transition:all .15s;}
+.search-input:focus{border-color:var(--b3);width:240px;}
+.search-ico{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--t3);font-size:12px;pointer-events:none;}
+.search-results{position:absolute;top:36px;left:0;width:320px;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r);box-shadow:0 16px 40px rgba(0,0,0,.6);z-index:200;overflow:hidden;display:none;}
+.search-results.open{display:block;}
+.sri{padding:9px 12px;cursor:pointer;border-bottom:1px solid var(--b1);}
+.sri:hover{background:var(--s3);}
+.sri:last-child{border-bottom:none;}
+.sri-name{font-size:13px;font-weight:500;}
+.sri-meta{font-size:10px;color:var(--t3);font-family:'Geist Mono',monospace;margin-top:2px;}
+
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:var(--rs);font-family:'Geist',sans-serif;font-size:12px;font-weight:500;cursor:pointer;border:1px solid transparent;transition:all .12s;white-space:nowrap;}
+.btn-primary{background:var(--t1);color:var(--bg);} .btn-primary:hover{background:#2a2a3a;}
+.btn-ghost{background:transparent;color:var(--t2);border-color:var(--b2);} .btn-ghost:hover{background:var(--s3);color:var(--t1);}
+.btn-danger{background:transparent;color:var(--red);border-color:rgba(239,68,68,.3);} .btn-danger:hover{background:var(--red-bg);}
+.btn-icon{width:28px;height:28px;padding:0;border-radius:var(--rs);display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--b1);color:var(--t3);cursor:pointer;font-size:12px;transition:all .12s;} .btn-icon:hover{background:var(--s3);color:var(--t1);}
+
+/* VIEWS */
+.view{display:none;flex:1;overflow:hidden;}
+.view.active{display:flex;flex-direction:column;}
+
+/* DASHBOARD */
+.dash-header{padding:18px 22px 14px;flex-shrink:0;display:flex;align-items:center;gap:10px;}
+.dash-title{font-size:20px;font-weight:700;}
+.dash-count{font-size:11px;color:var(--t3);background:var(--s3);padding:2px 8px;border-radius:10px;font-family:'Geist Mono',monospace;}
+.dash-toolbar{margin-left:auto;display:flex;gap:6px;}
+.view-toggle{display:flex;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);overflow:hidden;}
+.vt{padding:5px 10px;font-size:11px;color:var(--t3);cursor:pointer;background:transparent;border:none;font-family:'Geist Mono',monospace;transition:all .12s;} .vt.active{background:var(--s4);color:var(--t1);}
+.dash-scroll{flex:1;overflow-y:auto;padding:0 22px 28px;}
+.proj-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(295px,1fr));gap:13px;}
+.proj-list{display:flex;flex-direction:column;gap:6px;}
+
+/* PROJECT CARD */
+.proj-card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r);cursor:pointer;transition:all .18s;overflow:hidden;display:flex;flex-direction:column;}
+.proj-card:hover{border-color:var(--b2);background:var(--s2);transform:translateY(-2px);box-shadow:0 8px 28px rgba(0,0,0,.4);}
+.pc-accent{height:3px;}
+.pc-body{padding:15px 17px 13px;flex:1;}
+.pc-top{display:flex;align-items:flex-start;gap:9px;margin-bottom:9px;}
+.pc-icon{font-size:20px;flex-shrink:0;}
+.pc-name{font-size:15px;font-weight:600;flex:1;}
+.pc-status{font-size:9px;font-family:'Geist Mono',monospace;font-weight:600;letter-spacing:.06em;padding:2px 6px;border-radius:10px;flex-shrink:0;}
+.s-active{background:var(--green-bg);color:var(--green);}
+.s-paused{background:var(--amber-bg);color:var(--amber);}
+.s-done{background:rgba(144,144,184,.1);color:var(--t3);}
+.pc-desc{font-size:12px;color:var(--t3);line-height:1.5;margin-bottom:12px;min-height:16px;}
+.phase-bar{display:flex;gap:3px;margin-bottom:11px;}
+.pip{flex:1;height:3px;border-radius:2px;background:var(--b1);}
+.pip.filled{opacity:.7;} .pip.active{height:5px;margin-top:-1px;opacity:1;}
+.pc-footer{display:flex;align-items:center;justify-content:space-between;padding:9px 17px;border-top:1px solid var(--b1);}
+.pc-meta{font-size:11px;font-family:'Geist Mono',monospace;color:var(--t4);}
+.pc-claude-link{font-size:10px;color:var(--green);background:var(--green-bg);padding:2px 7px;border-radius:4px;text-decoration:none;font-weight:500;}
+
+/* PROJECT LIST ROW */
+.plr{background:var(--s1);border:1px solid var(--b1);border-radius:var(--rs);padding:11px 15px;cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:11px;}
+.plr:hover{border-color:var(--b2);background:var(--s2);}
+.plr-icon{font-size:17px;flex-shrink:0;}
+.plr-name{font-size:14px;font-weight:600;flex:1;}
+.plr-pips{display:flex;gap:2px;}
+.plr-pip{width:16px;height:4px;border-radius:2px;background:var(--b1);}
+.plr-pip.has{opacity:.8;}
+.plr-meta{font-size:11px;color:var(--t3);font-family:'Geist Mono',monospace;min-width:55px;text-align:right;}
+.new-card{background:transparent;border:1px dashed var(--b2);border-radius:var(--r);cursor:pointer;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:8px;min-height:155px;color:var(--t4);}
+.new-card:hover{border-color:var(--t2);color:var(--t2);background:var(--s1);}
+.new-list-row{background:transparent;border:1px dashed var(--b2);border-radius:var(--rs);padding:11px 15px;cursor:pointer;transition:all .12s;display:flex;align-items:center;justify-content:center;gap:8px;color:var(--t4);}
+.new-list-row:hover{border-color:var(--t2);color:var(--t2);}
+
+/* BOARD */
+.board-topbar{padding:11px 18px;flex-shrink:0;border-bottom:1px solid var(--b1);background:var(--s1);display:flex;align-items:center;gap:9px;}
+.board-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:7px;}
+.board-actions{margin-left:auto;display:flex;gap:6px;}
+.phase-ov{padding:7px 18px;flex-shrink:0;background:var(--s1);border-bottom:1px solid var(--b1);display:flex;gap:4px;align-items:center;}
+.pov{flex:1;padding:5px 7px;border-radius:var(--rs);font-size:9px;font-weight:700;letter-spacing:.08em;text-align:center;font-family:'Geist Mono',monospace;border:1px solid transparent;}
+.pov.has{border-color:var(--pc);color:var(--pc);background:var(--pb);}
+.pov:not(.has){color:var(--t4);}
+.pov-arr{color:var(--t4);font-size:10px;}
+.filter-bar{padding:6px 18px;flex-shrink:0;background:var(--bg);border-bottom:1px solid var(--b1);display:flex;gap:6px;align-items:center;}
+.fb-label{font-size:11px;color:var(--t4);}
+.fb{padding:3px 9px;border-radius:10px;font-size:11px;background:transparent;border:1px solid var(--b1);color:var(--t3);cursor:pointer;font-family:'Geist',sans-serif;transition:all .12s;}
+.fb.active{border-color:var(--b3);color:var(--t1);background:var(--s3);}
+.fb:hover:not(.active){border-color:var(--b2);color:var(--t2);}
+.board-body{flex:1;overflow:hidden;display:flex;}
+.cols-scroll{display:flex;overflow-x:auto;overflow-y:hidden;flex:1;}
+
+/* COLUMNS */
+.col{min-width:268px;max-width:268px;border-right:1px solid var(--b1);display:flex;flex-direction:column;height:100%;}
+.col:last-child{border-right:none;}
+.col.drag-over .col-cards{background:rgba(0,0,0,.03);}
+.col-head{padding:11px 13px 9px;border-bottom:1px solid var(--b1);flex-shrink:0;position:relative;}
+.col-head::after{content:'';position:absolute;bottom:0;left:0;right:0;height:2px;background:var(--cc);opacity:.5;}
+.col-title-row{display:flex;align-items:center;gap:6px;margin-bottom:3px;}
+.col-dot{width:7px;height:7px;border-radius:50%;background:var(--cc);}
+.col-label{font-size:10px;font-weight:700;letter-spacing:.1em;color:var(--t2);}
+.col-count{margin-left:auto;font-size:10px;font-family:'Geist Mono',monospace;color:var(--t4);background:var(--s3);padding:1px 5px;border-radius:7px;}
+.col-desc{font-size:10px;color:var(--t4);line-height:1.4;}
+.col-actions{padding:5px 9px;flex-shrink:0;border-bottom:1px solid var(--b1);}
+.col-ask{width:100%;padding:5px 8px;border-radius:var(--rs);background:var(--cb);border:1px solid var(--cc);opacity:.6;font-family:'Geist',sans-serif;font-size:11px;font-weight:500;color:var(--cc);cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;}
+.col-ask:hover{opacity:1;}
+.col-cards{flex:1;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:6px;}
+.empty-hint{padding:14px 8px;text-align:center;color:var(--t4);font-size:11px;line-height:1.6;}
+.col-footer{padding:7px;flex-shrink:0;border-top:1px solid var(--b1);}
+.quick-input{width:100%;padding:7px 9px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:12px;outline:none;transition:border-color .15s;}
+.quick-input:focus{border-color:var(--cc);}
+.quick-input::placeholder{color:var(--t4);}
+
+/* CARDS */
+.card{background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);padding:9px 10px;cursor:pointer;transition:all .15s;position:relative;}
+.card:hover{border-color:var(--b2);background:var(--s3);}
+.card.dragging{opacity:.35;transform:rotate(1.5deg);}
+.card-type-row{display:flex;align-items:center;gap:4px;margin-bottom:5px;}
+.card-type-ico{font-size:11px;}
+.prio-badge{font-size:9px;font-family:'Geist Mono',monospace;font-weight:600;letter-spacing:.05em;padding:1px 5px;border-radius:3px;margin-left:auto;}
+.prio-high{background:var(--red-bg);color:var(--red);}
+.prio-mid{background:var(--amber-bg);color:var(--amber);}
+.prio-low{background:var(--green-bg);color:var(--green);}
+.card-title{font-size:12px;font-weight:600;line-height:1.35;margin-bottom:3px;}
+.card-preview{font-size:11px;color:var(--t3);line-height:1.45;max-height:42px;overflow:hidden;}
+.card-link{display:flex;align-items:center;gap:4px;margin-top:4px;font-size:11px;color:#3b82f6;text-decoration:none;}
+.card-link:hover{color:#60a5fa;}
+.card-img{width:100%;max-height:95px;object-fit:cover;border-radius:4px;margin-top:4px;}
+.card-tags{display:flex;flex-wrap:wrap;gap:3px;margin-top:5px;}
+.ctag{font-size:9px;padding:1px 5px;border-radius:3px;background:var(--s4);color:var(--t3);border:1px solid var(--b1);font-family:'Geist Mono',monospace;}
+.card-bottom{display:flex;align-items:center;gap:5px;margin-top:6px;}
+.card-date{font-size:10px;font-family:'Geist Mono',monospace;color:var(--t4);}
+.due-tag{font-size:10px;font-family:'Geist Mono',monospace;padding:1px 5px;border-radius:3px;}
+.due-over{background:var(--red-bg);color:var(--red);}
+.due-soon{background:var(--amber-bg);color:var(--amber);}
+.due-ok{color:var(--t4);}
+.cl-badge{font-size:10px;color:var(--t4);font-family:'Geist Mono',monospace;margin-left:auto;}
+.card-del{position:absolute;top:5px;right:5px;display:none;width:19px;height:19px;border-radius:3px;background:var(--red-bg);border:none;color:var(--red);font-size:10px;cursor:pointer;align-items:center;justify-content:center;}
+.card:hover .card-del{display:flex;}
+
+/* DETAIL OVERLAY */
+.detail-ov{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:180;display:none;align-items:flex-start;justify-content:center;padding:52px 14px 14px;backdrop-filter:blur(3px);overflow-y:auto;}
+.detail-ov.open{display:flex;}
+.detail-panel{background:var(--s1);border:1px solid var(--b2);border-radius:var(--rx);width:580px;max-width:100%;animation:su .2s ease;}
+@keyframes su{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
+.dp-head{padding:18px 22px 14px;border-bottom:1px solid var(--b1);display:flex;gap:9px;align-items:flex-start;}
+.dp-type-ico{font-size:18px;flex-shrink:0;margin-top:3px;}
+.dp-title-wrap{flex:1;}
+.dp-title{width:100%;font-family:'Geist',sans-serif;font-size:17px;font-weight:700;background:transparent;border:none;outline:none;color:var(--t1);border-bottom:1px solid transparent;padding:2px 0;transition:border-color .15s;}
+.dp-title:focus{border-bottom-color:var(--b3);}
+.dp-phase-tag{font-size:10px;font-family:'Geist Mono',monospace;font-weight:600;padding:2px 7px;border-radius:4px;margin-top:5px;display:inline-block;}
+.dp-body{padding:18px 22px;display:flex;flex-direction:column;gap:15px;}
+.dp-props{display:grid;grid-template-columns:1fr 1fr;gap:9px;}
+.dp-prop{display:flex;flex-direction:column;gap:3px;}
+.dp-prop label{font-size:11px;color:var(--t3);font-weight:500;}
+.dp-prop select,.dp-prop input[type=date]{background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:12px;padding:5px 7px;outline:none;transition:border-color .12s;}
+.dp-prop select:focus,.dp-prop input:focus{border-color:var(--b3);}
+.dp-prop select option{background:var(--s2);}
+.dp-sec{font-size:10px;font-weight:700;color:var(--t3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:5px;}
+.dp-ta{width:100%;min-height:75px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:13px;line-height:1.6;padding:9px 11px;outline:none;resize:vertical;transition:border-color .12s;}
+.dp-ta:focus{border-color:var(--b3);}
+.dp-url{width:100%;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);color:#3b82f6;font-family:'Geist Mono',monospace;font-size:12px;padding:6px 9px;outline:none;transition:border-color .12s;}
+.dp-url:focus{border-color:var(--b3);}
+.tags-wrap{display:flex;flex-direction:column;gap:6px;}
+.tags-list{display:flex;flex-wrap:wrap;gap:5px;}
+.dp-tag-item{font-size:11px;padding:2px 7px;border-radius:4px;background:var(--s4);color:var(--t2);border:1px solid var(--b1);display:flex;align-items:center;gap:4px;}
+.dp-tag-rm{cursor:pointer;color:var(--t4);font-size:10px;background:none;border:none;} .dp-tag-rm:hover{color:var(--red);}
+.dp-tag-input{background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:12px;padding:5px 8px;outline:none;transition:border-color .12s;width:100%;} .dp-tag-input:focus{border-color:var(--b3);}
+.checklist-items{display:flex;flex-direction:column;gap:5px;margin-bottom:6px;}
+.cl-item{display:flex;align-items:center;gap:7px;}
+.cl-cb{width:14px;height:14px;border-radius:3px;border:1px solid var(--b2);background:transparent;cursor:pointer;flex-shrink:0;appearance:none;display:flex;align-items:center;justify-content:center;transition:all .12s;position:relative;}
+.cl-cb:checked{background:var(--green);border-color:var(--green);}
+.cl-cb:checked::after{content:'✓';position:absolute;font-size:9px;color:#000;font-weight:700;}
+.cl-text{flex:1;font-size:12px;color:var(--t1);background:transparent;border:none;outline:none;font-family:'Geist',sans-serif;}
+.cl-text.done{text-decoration:line-through;color:var(--t4);}
+.cl-rm-btn{background:transparent;border:none;color:var(--t4);cursor:pointer;font-size:11px;padding:0 2px;} .cl-rm-btn:hover{color:var(--red);}
+.cl-new{background:var(--s2);border:1px dashed var(--b2);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:12px;padding:5px 8px;outline:none;width:100%;} .cl-new:focus{border-style:solid;border-color:var(--b3);}
+.dp-footer{padding:13px 22px;border-top:1px solid var(--b1);display:flex;justify-content:space-between;align-items:center;}
+
+/* CHAT PANEL */
+.chat-panel{position:fixed;top:52px;right:0;bottom:0;width:370px;background:var(--s1);border-left:1px solid var(--b2);display:flex;flex-direction:column;transform:translateX(100%);transition:transform .28s cubic-bezier(.4,0,.2,1);z-index:140;}
+.chat-panel.open{transform:translateX(0);}
+.chat-head{padding:13px 15px;border-bottom:1px solid var(--b1);display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.chat-orb{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,rgba(245,158,11,.2),rgba(6,182,212,.2));display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0;}
+.chat-head-info{flex:1;min-width:0;}
+.chat-title{font-size:13px;font-weight:600;}
+.chat-ctx-label{font-size:11px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.chat-ctx-bar{padding:6px 13px;background:var(--s2);border-bottom:1px solid var(--b1);display:flex;gap:5px;flex-wrap:wrap;flex-shrink:0;}
+.ctx-tag{font-size:9px;font-family:'Geist Mono',monospace;font-weight:600;letter-spacing:.06em;padding:2px 6px;border-radius:10px;}
+.chat-msgs{flex:1;overflow-y:auto;padding:13px;display:flex;flex-direction:column;gap:9px;}
+.msg{display:flex;gap:7px;align-items:flex-start;}
+.msg.user{flex-direction:row-reverse;}
+.msg-av{width:25px;height:25px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:var(--s3);color:var(--t2);}
+.msg.user .msg-av{background:linear-gradient(135deg,var(--ci),var(--cad));color:#000;}
+.msg-bub{max-width:83%;padding:8px 11px;border-radius:8px;font-size:12px;line-height:1.55;background:var(--s2);border:1px solid var(--b1);}
+.msg.user .msg-bub{background:var(--s3);border-color:var(--b2);}
+.msg-bub.loading{color:var(--t3);font-style:italic;}
+.chat-input-area{padding:9px;border-top:1px solid var(--b1);flex-shrink:0;}
+.chat-row{display:flex;gap:6px;align-items:flex-end;}
+.chat-ta{flex:1;padding:7px 9px;background:var(--s3);border:1px solid var(--b1);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:12px;outline:none;resize:none;min-height:34px;max-height:110px;line-height:1.4;transition:border-color .12s;} .chat-ta:focus{border-color:var(--b3);}
+.chat-send{width:32px;height:32px;border-radius:var(--rs);flex-shrink:0;background:var(--t1);border:none;color:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:opacity .12s;font-size:13px;} .chat-send:hover{opacity:.85;} .chat-send:disabled{opacity:.35;cursor:not-allowed;}
+.chat-hint{font-size:10px;font-family:'Geist Mono',monospace;color:var(--t4);margin-top:5px;}
+
+/* MODAL */
+.modal-ov{position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;display:none;align-items:center;justify-content:center;backdrop-filter:blur(4px);}
+.modal-ov.open{display:flex;}
+.modal{background:var(--s1);border:1px solid var(--b2);border-radius:var(--rx);padding:24px;width:440px;max-width:95vw;max-height:90vh;overflow-y:auto;animation:su .18s ease;}
+.modal-title{font-size:16px;font-weight:700;margin-bottom:2px;}
+.modal-sub{font-size:12px;color:var(--t3);margin-bottom:20px;}
+.modal-footer{display:flex;justify-content:flex-end;gap:7px;margin-top:20px;}
+.form-group{margin-bottom:13px;}
+.form-label{display:block;font-size:11px;font-weight:500;color:var(--t2);margin-bottom:5px;letter-spacing:.03em;}
+.form-input,.form-ta,.form-select{width:100%;padding:8px 10px;background:var(--s3);border:1px solid var(--b2);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:13px;outline:none;transition:border-color .12s;}
+.form-ta{min-height:65px;resize:vertical;}
+.form-input:focus,.form-ta:focus,.form-select:focus{border-color:var(--b3);}
+.form-select option{background:var(--s3);}
+.emoji-row{display:flex;flex-wrap:wrap;gap:5px;}
+.emoji-btn{width:32px;height:32px;border-radius:var(--rs);background:var(--s3);border:1px solid var(--b1);font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .12s;} .emoji-btn.sel{border-color:var(--t1);background:var(--s4);}
+.color-row{display:flex;gap:6px;flex-wrap:wrap;}
+.c-sw{width:25px;height:25px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .12s;} .c-sw.sel{border-color:var(--t1);transform:scale(1.18);}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(65px);background:var(--s3);border:1px solid var(--b2);color:var(--t1);padding:8px 15px;border-radius:var(--r);font-size:12px;font-weight:500;z-index:999;transition:transform .24s cubic-bezier(.4,0,.2,1);box-shadow:0 8px 22px rgba(0,0,0,.5);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+</style>
+</head>
+<body>
+<div class="app">
+
+<div class="topbar">
+  <div class="logo"><span class="logo-accent">HAF</span> Projects</div>
+  <div class="sep"></div>
+  <div class="breadcrumb" id="breadcrumb"></div>
+  <div class="topbar-right">
+    <div class="search-wrap">
+      <span class="search-ico">⌕</span>
+      <input class="search-input" id="searchInput" placeholder="Zoeken...">
+      <div class="search-results" id="searchResults"></div>
+    </div>
+    <button class="btn btn-ghost" id="btnNewProj">+ Nieuw project</button>
+  </div>
+</div>
+
+<div class="view active" id="viewDash">
+  <div class="dash-header">
+    <div class="dash-title">Projecten</div>
+    <div class="dash-count" id="dashCount"></div>
+    <div class="dash-toolbar">
+      <div class="view-toggle">
+        <div class="vt active" id="vtGrid" data-view="grid">▦ Grid</div>
+        <div class="vt" id="vtList" data-view="list">≡ Lijst</div>
+      </div>
+    </div>
+  </div>
+  <div class="dash-scroll">
+    <div id="projContainer"></div>
+  </div>
+</div>
+
+<div class="view" id="viewBoard">
+  <div class="board-topbar">
+    <button class="btn btn-ghost" id="btnBackDash">← Dashboard</button>
+    <div class="board-title" id="boardTitle"></div>
+    <div class="board-actions">
+      <button class="btn btn-ghost" id="btnBoardClaude">⬡ Claude</button>
+      <button class="btn btn-ghost" id="btnEditProj">⚙ Instellingen</button>
+    </div>
+  </div>
+  <div class="phase-ov" id="phaseOv"></div>
+  <div class="filter-bar">
+    <span class="fb-label">Filter:</span>
+    <button class="fb active" data-filter="all">Alles</button>
+    <button class="fb" data-filter="note">📝 Notities</button>
+    <button class="fb" data-filter="link">🔗 Links</button>
+    <button class="fb" data-filter="image">🖼 Afbeeldingen</button>
+    <button class="fb" data-filter="high">🔴 Hoog</button>
+    <button class="fb" data-filter="due">📅 Binnenkort</button>
+  </div>
+  <div class="board-body">
+    <div class="cols-scroll" id="boardCols"></div>
+  </div>
+</div>
+
+</div>
+
+<!-- CARD DETAIL -->
+<div class="detail-ov" id="detailOv">
+  <div class="detail-panel" id="detailPanel">
+    <div class="dp-head">
+      <div class="dp-type-ico" id="dpTypeIco">📝</div>
+      <div class="dp-title-wrap">
+        <input class="dp-title" id="dpTitle" placeholder="Titel...">
+        <div class="dp-phase-tag" id="dpPhaseTag"></div>
+      </div>
+      <button class="btn-icon" id="btnCloseDetail">✕</button>
+    </div>
+    <div class="dp-body">
+      <div class="dp-props">
+        <div class="dp-prop"><label>Prioriteit</label>
+          <select id="dpPrio"><option value="">— geen —</option><option value="high">🔴 Hoog</option><option value="mid">🟡 Midden</option><option value="low">🟢 Laag</option></select>
+        </div>
+        <div class="dp-prop"><label>Vervaldatum</label><input type="date" id="dpDue"></div>
+        <div class="dp-prop"><label>Type</label>
+          <select id="dpType"><option value="note">📝 Notitie</option><option value="link">🔗 Link</option><option value="image">🖼 Afbeelding</option></select>
+        </div>
+        <div class="dp-prop"><label>Verplaats naar fase</label>
+          <select id="dpMovePhase"></select>
+        </div>
+      </div>
+      <div>
+        <div class="dp-sec">Inhoud</div>
+        <textarea class="dp-ta" id="dpContent" placeholder="Notities, observaties, beslissingen..."></textarea>
+        <div id="dpUrlWrap" style="display:none;margin-top:6px"><input class="dp-url" id="dpUrl" placeholder="https://..."></div>
+        <div id="dpImgWrap" style="display:none;margin-top:8px">
+          <img id="dpImgPreview" style="width:100%;max-height:170px;object-fit:cover;border-radius:var(--rs);display:none;margin-bottom:6px;">
+          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--t2);">
+            <input type="file" accept="image/*" id="dpImgInput" style="display:none"> 📎 Kies afbeelding
+          </label>
+        </div>
+      </div>
+      <div>
+        <div class="dp-sec">Tags</div>
+        <div class="tags-wrap">
+          <input class="dp-tag-input" id="dpTagInput" placeholder="+ tag toevoegen (Enter)">
+          <div class="tags-list" id="dpTagsList"></div>
+        </div>
+      </div>
+      <div>
+        <div class="dp-sec">Subtaken / Checklist</div>
+        <div class="checklist-items" id="dpChecklist"></div>
+        <input class="cl-new" id="clNew" placeholder="+ Subtaak toevoegen (Enter)">
+      </div>
+    </div>
+    <div class="dp-footer">
+      <button class="btn btn-danger" id="btnDelCard">🗑 Verwijder</button>
+      <div style="display:flex;gap:7px">
+        <button class="btn btn-ghost" id="btnCancelDetail">Annuleer</button>
+        <button class="btn btn-primary" id="btnSaveDetail">Opslaan</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT -->
+<div class="chat-panel" id="chatPanel">
+  <div class="chat-head">
+    <div class="chat-orb">⬡</div>
+    <div class="chat-head-info">
+      <div class="chat-title">Claude — HAF Assistent</div>
+      <div class="chat-ctx-label" id="chatCtxLabel">Geen context</div>
+    </div>
+    <button class="btn-icon" id="btnCloseChat">✕</button>
+  </div>
+  <div class="chat-ctx-bar" id="chatCtxBar"></div>
+  <div class="chat-msgs" id="chatMsgs"></div>
+  <div class="chat-input-area">
+    <div class="chat-row">
+      <textarea class="chat-ta" id="chatTa" placeholder="Stel een vraag..." rows="1"></textarea>
+      <button class="chat-send" id="chatSend">➤</button>
+    </div>
+    <div class="chat-hint">CKPS → localhost:3800</div>
+  </div>
+</div>
+
+<!-- MODAL PROJECT -->
+<div class="modal-ov" id="modalProj">
+  <div class="modal">
+    <div class="modal-title" id="mProjTitle">Nieuw project</div>
+    <div class="modal-sub">Definieer de intentie — nulstap van de HAF-loop</div>
+    <div class="form-group"><div class="form-label">Icoon</div><div class="emoji-row" id="emojiRow"></div></div>
+    <div class="form-group"><div class="form-label">Naam *</div><input class="form-input" id="pName" placeholder="Projectnaam..."></div>
+    <div class="form-group"><div class="form-label">Intentie / beschrijving</div><textarea class="form-ta" id="pDesc" placeholder="Wat moet dit bereiken? Voor wie?"></textarea></div>
+    <div class="form-group"><div class="form-label">Status</div>
+      <select class="form-select" id="pStatus"><option value="active">Actief</option><option value="paused">Gepauseerd</option><option value="done">Afgerond</option></select>
+    </div>
+    <div class="form-group"><div class="form-label">Kleur</div><div class="color-row" id="colorRow"></div></div>
+    <div class="form-group"><div class="form-label">Claude Project URL <span style="color:var(--t4)">(optioneel)</span></div><input class="form-input" id="pClaudeUrl" placeholder="https://claude.ai/project/..."></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btnCancelProj">Annuleer</button>
+      <button class="btn btn-primary" id="btnSaveProj">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+'use strict';
+
+// ── CONSTANTS ──
+const CKPS = 'http://localhost:3800/v1/messages';
+const CKPS_KEY = 'CKPS_KEY_PLACEHOLDER';
+const MODEL = 'claude-opus-4-6';
+const STORE = 'haf_proj_v2';
+
+const PHASES = [
+  {id:'intentie',   label:'INTENTIE',   desc:'Wat moet dit bereiken? Voor wie?',          color:'#f59e0b', bg:'rgba(245,158,11,.1)'},
+  {id:'observeren', label:'OBSERVEREN', desc:'Wat is er? Wat ontbreekt?',                 color:'#3b82f6', bg:'rgba(59,130,246,.1)'},
+  {id:'plannen',    label:'PLANNEN',    desc:'Opties, afwegingen, risico\'s.',            color:'#a855f7', bg:'rgba(168,85,247,.1)'},
+  {id:'acteren',    label:'ACTEREN',    desc:'Uitvoeren op basis van heldere intentie.',  color:'#10b981', bg:'rgba(16,185,129,.1)'},
+  {id:'valideren',  label:'VALIDEREN',  desc:'⚠ Menselijke controle — verplicht.',        color:'#f97316', bg:'rgba(249,115,22,.1)'},
+  {id:'adapteren',  label:'ADAPTEREN',  desc:'Wat leren we? Wat leggen we vast?',         color:'#06b6d4', bg:'rgba(6,182,212,.1)'},
+];
+const EMOJIS = ['🚀','📘','🧠','⚡','🔑','🌱','🏗','🎯','💎','🔬','🌐','📊','🤝','🛡','🔄'];
+const COLORS = ['#3b82f6','#a855f7','#10b981','#f59e0b','#f97316','#06b6d4','#ec4899','#ef4444'];
+
+// ── STATE ──
+let projects = [];
+let curProjId = null;
+let editProjId = null;
+let curFilter = 'all';
+let dashView = 'grid';
+let chatProjId = null;
+let chatPhaseId = null;
+let chatHistory = [];
+let chatLoading = false;
+let detailState = {projId:null, phaseId:null, cardId:null, tags:[], checklist:[], imgData:null};
+let dragState = {cardId:null, phaseId:null};
+
+// ── STORAGE ──
+function save() { try { localStorage.setItem(STORE, JSON.stringify(projects)); } catch(e) {} }
+function load() { try { const d = localStorage.getItem(STORE); if (d) projects = JSON.parse(d); } catch(e) {} }
+
+// ── HELPERS ──
+function uid() { return Math.random().toString(36).substr(2, 9); }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmtDate(iso) { try { return new Date(iso).toLocaleDateString('nl-NL',{day:'2-digit',month:'short'}); } catch(e) { return ''; } }
+function getProj(id) { return projects.find(p => p.id === id); }
+function totalCards(p) { return PHASES.reduce((a,ph) => a + (p.phases[ph.id]||[]).length, 0); }
+function getActivePhase(p) { let l = PHASES[0].id; PHASES.forEach(ph => { if ((p.phases[ph.id]||[]).length > 0) l = ph.id; }); return l; }
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2300);
+}
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function md(t) {
+  return esc(t)
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g,'<em>$1</em>')
+    .replace(/`(.+?)`/g,'<code style="background:var(--s3);padding:1px 5px;border-radius:3px;font-family:Geist Mono,monospace;font-size:11px">$1</code>')
+    .replace(/\n/g,'<br>');
+}
+
+// ── DASHBOARD ──
+function showDash() {
+  document.getElementById('viewDash').classList.add('active');
+  document.getElementById('viewBoard').classList.remove('active');
+  document.getElementById('breadcrumb').innerHTML = '';
+  closeChatPanel();
+  renderDash();
+}
+
+function renderDash() {
+  const cnt = document.getElementById('projContainer');
+  const lbl = document.getElementById('dashCount');
+  lbl.textContent = projects.length + ' project' + (projects.length !== 1 ? 'en' : '');
+  document.getElementById('vtGrid').classList.toggle('active', dashView === 'grid');
+  document.getElementById('vtList').classList.toggle('active', dashView === 'list');
+
+  if (dashView === 'grid') {
+    let h = '<div class="proj-grid">';
+    projects.forEach(p => { h += projCardHTML(p); });
+    h += '<div class="new-card" data-action="newproject"><span style="font-size:22px">+</span><span style="font-size:13px;font-weight:500">Nieuw project</span></div>';
+    h += '</div>';
+    cnt.innerHTML = h;
+  } else {
+    let h = '<div class="proj-list">';
+    projects.forEach(p => { h += projListRowHTML(p); });
+    h += '<div class="new-list-row" data-action="newproject"><span>+</span><span>Nieuw project</span></div>';
+    h += '</div>';
+    cnt.innerHTML = h;
+  }
+}
+
+function projCardHTML(p) {
+  const active = getActivePhase(p);
+  const ph = PHASES.find(x => x.id === active) || PHASES[0];
+  const statusLabels = {active:'Actief', paused:'Gepauseerd', done:'Afgerond'};
+  const statusClasses = {active:'s-active', paused:'s-paused', done:'s-done'};
+  const st = p.status || 'active';
+  const pips = PHASES.map(ph2 => {
+    const n = (p.phases[ph2.id]||[]).length;
+    const isActive = ph2.id === active;
+    return '<div class="pip ' + (isActive ? 'active' : n > 0 ? 'filled' : '') + '" style="background:' + ph2.color + '"></div>';
+  }).join('');
+  return '<div class="proj-card" data-action="openproject" data-id="' + p.id + '">' +
+    '<div class="pc-accent" style="background:' + p.color + '"></div>' +
+    '<div class="pc-body">' +
+    '<div class="pc-top">' +
+    '<div class="pc-icon">' + (p.icon||'📋') + '</div>' +
+    '<div class="pc-name">' + esc(p.name) + '</div>' +
+    '<div class="pc-status ' + statusClasses[st] + '">' + statusLabels[st] + '</div>' +
+    '</div>' +
+    '<div class="pc-desc">' + esc(p.desc||'') + '</div>' +
+    '<div class="phase-bar">' + pips + '</div>' +
+    '</div>' +
+    '<div class="pc-footer">' +
+    '<span class="pc-meta">' + totalCards(p) + ' kaarten · ' + active.toUpperCase() + '</span>' +
+    (p.claudeUrl ? '<a href="' + esc(p.claudeUrl) + '" target="_blank" class="pc-claude-link" data-action="stopclick">↗ Claude</a>' : '') +
+    '</div></div>';
+}
+
+function projListRowHTML(p) {
+  const active = getActivePhase(p);
+  const statusLabels = {active:'Actief', paused:'Gepauseerd', done:'Afgerond'};
+  const statusClasses = {active:'s-active', paused:'s-paused', done:'s-done'};
+  const st = p.status || 'active';
+  const pips = PHASES.map(ph => {
+    const n = (p.phases[ph.id]||[]).length;
+    return '<div class="plr-pip ' + (n > 0 ? 'has' : '') + '" style="' + (n > 0 ? 'background:' + ph.color : '') + '"></div>';
+  }).join('');
+  return '<div class="plr" data-action="openproject" data-id="' + p.id + '">' +
+    '<div class="plr-icon">' + (p.icon||'📋') + '</div>' +
+    '<div class="plr-name">' + esc(p.name) + '</div>' +
+    '<div class="pc-status ' + statusClasses[st] + '" style="font-size:9px;padding:2px 6px">' + statusLabels[st] + '</div>' +
+    '<div class="plr-pips">' + pips + '</div>' +
+    '<div class="plr-meta">' + totalCards(p) + ' kaarten</div>' +
+    '</div>';
+}
+
+// ── BOARD ──
+function openProject(id) {
+  curProjId = id;
+  const p = getProj(id);
+  if (!p) return;
+  document.getElementById('viewDash').classList.remove('active');
+  document.getElementById('viewBoard').classList.add('active');
+  document.getElementById('boardTitle').innerHTML = (p.icon||'📋') + ' ' + esc(p.name);
+  document.getElementById('breadcrumb').innerHTML = '<span>/ </span><span class="bc-proj">' + esc(p.name) + '</span>';
+  renderPhaseOv(p);
+  renderBoard(p);
+}
+
+function renderPhaseOv(p) {
+  const el = document.getElementById('phaseOv');
+  let h = '';
+  PHASES.forEach((ph, i) => {
+    const n = (p.phases[ph.id]||[]).length;
+    h += '<div class="pov ' + (n > 0 ? 'has' : '') + '" style="--pc:' + ph.color + ';--pb:' + ph.bg + '">' + ph.label + '</div>';
+    if (i < 5) h += '<div class="pov-arr">→</div>';
+  });
+  el.innerHTML = h;
+}
+
+function renderBoard(p) {
+  const container = document.getElementById('boardCols');
+  let h = '';
+  PHASES.forEach(ph => {
+    const allCards = p.phases[ph.id] || [];
+    const filtered = allCards.filter(c => passFilter(c));
+    h += '<div class="col" id="col-' + ph.id + '" data-phase="' + ph.id + '" style="--cc:' + ph.color + ';--cb:' + ph.bg + '">' +
+      '<div class="col-head">' +
+      '<div class="col-title-row"><div class="col-dot"></div><div class="col-label">' + ph.label + '</div><div class="col-count">' + allCards.length + '</div></div>' +
+      '<div class="col-desc">' + esc(ph.desc) + '</div>' +
+      '</div>' +
+      '<div class="col-actions">' +
+      '<button class="col-ask" data-action="openchat" data-proj="' + p.id + '" data-phase="' + ph.id + '">⬡ Vraag Claude over ' + ph.label.toLowerCase() + '</button>' +
+      '</div>' +
+      '<div class="col-cards" id="cards-' + ph.id + '">' +
+      (filtered.length === 0 ? '<div class="empty-hint">Nog geen activiteiten<br>in ' + ph.label + '</div>' : '') +
+      filtered.map(c => cardHTML(c, ph.id)).join('') +
+      '</div>' +
+      '<div class="col-footer">' +
+      '<input class="quick-input" data-action="quickadd" data-phase="' + ph.id + '" placeholder="+ Snel toevoegen (Enter)">' +
+      '</div></div>';
+  });
+  container.innerHTML = h;
+  setupDragDrop();
+}
+
+function passFilter(c) {
+  if (curFilter === 'all') return true;
+  if (curFilter === 'note') return c.type === 'note';
+  if (curFilter === 'link') return c.type === 'link';
+  if (curFilter === 'image') return c.type === 'image';
+  if (curFilter === 'high') return c.priority === 'high';
+  if (curFilter === 'due') {
+    if (!c.due) return false;
+    const diff = (new Date(c.due) - new Date()) / (1000*60*60*24);
+    return diff <= 7 && diff >= -1;
+  }
+  return true;
+}
+
+function cardHTML(c, phaseId) {
+  const typeIcos = {note:'📝', link:'🔗', image:'🖼'};
+  const prioLabels = {high:'🔴 HOOG', mid:'🟡 MID', low:'🟢 LAAG'};
+  const prioHtml = c.priority ? '<div class="prio-badge prio-' + c.priority + '">' + prioLabels[c.priority] + '</div>' : '';
+
+  let preview = '';
+  if (c.type === 'note' && c.content) preview = '<div class="card-preview">' + esc(c.content.substring(0,88)) + (c.content.length>88?'…':'') + '</div>';
+  if (c.type === 'link' && c.url) preview = '<a class="card-link" href="' + esc(c.url) + '" target="_blank" data-action="stopclick">🔗 ' + esc(truncUrl(c.url)) + '</a>';
+  if (c.type === 'image' && c.imageData) preview = '<img class="card-img" src="' + c.imageData + '">';
+
+  const tagsHtml = (c.tags && c.tags.length) ? '<div class="card-tags">' + c.tags.map(t => '<span class="ctag">' + esc(t) + '</span>').join('') + '</div>' : '';
+  const dueHtml = c.due ? dueTagHTML(c.due) : '';
+  const clHtml = (c.checklist && c.checklist.length) ? '<div class="cl-badge">' + c.checklist.filter(x=>x.done).length + '/' + c.checklist.length + ' ✓</div>' : '';
+
+  return '<div class="card" id="card-' + c.id + '" draggable="true" data-action="opendetail" data-card="' + c.id + '" data-phase="' + phaseId + '">' +
+    '<div class="card-type-row"><span class="card-type-ico">' + (typeIcos[c.type]||'📝') + '</span>' + prioHtml + '</div>' +
+    (c.title ? '<div class="card-title">' + esc(c.title) + '</div>' : '') +
+    preview + tagsHtml +
+    '<div class="card-bottom"><span class="card-date">' + fmtDate(c.createdAt) + '</span>' + dueHtml + clHtml + '</div>' +
+    '<button class="card-del" data-action="deletecard" data-card="' + c.id + '" data-phase="' + phaseId + '">✕</button>' +
+    '</div>';
+}
+
+function dueTagHTML(due) {
+  const diff = (new Date(due) - new Date()) / (1000*60*60*24);
+  let cls = 'due-ok', txt = new Date(due).toLocaleDateString('nl-NL',{day:'2-digit',month:'short'});
+  if (diff < 0) { cls = 'due-over'; txt = 'Verlopen'; }
+  else if (diff <= 3) cls = 'due-soon';
+  return '<span class="due-tag ' + cls + '">📅 ' + txt + '</span>';
+}
+
+function truncUrl(u) {
+  try { const url = new URL(u); return url.hostname + (url.pathname.length > 1 ? url.pathname.substring(0,18) : ''); }
+  catch(e) { return u.substring(0, 38); }
+}
+
+// ── QUICK ADD ──
+function quickAdd(phaseId, value) {
+  if (!value.trim()) return;
+  const p = getProj(curProjId);
+  if (!p) return;
+  const card = {id:uid(), type:'note', title:value.trim(), content:'', tags:[], checklist:[], createdAt:new Date().toISOString()};
+  if (!p.phases[phaseId]) p.phases[phaseId] = [];
+  p.phases[phaseId].push(card);
+  save();
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast('Kaart toegevoegd');
+}
+
+// ── DRAG & DROP ──
+function setupDragDrop() {
+  document.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('dragstart', e => {
+      dragState.cardId = el.dataset.card;
+      dragState.phaseId = el.dataset.phase;
+      setTimeout(() => el.classList.add('dragging'), 0);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
+    });
+  });
+  document.querySelectorAll('.col').forEach(col => {
+    col.addEventListener('dragover', e => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      document.querySelectorAll('.col').forEach(c => c.classList.remove('drag-over'));
+      col.classList.add('drag-over');
+    });
+    col.addEventListener('dragleave', e => {
+      if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over');
+    });
+    col.addEventListener('drop', e => {
+      e.preventDefault();
+      const targetPhase = col.dataset.phase;
+      col.classList.remove('drag-over');
+      if (!dragState.cardId || dragState.phaseId === targetPhase) return;
+      const p = getProj(curProjId);
+      if (!p) return;
+      const src = p.phases[dragState.phaseId] || [];
+      const idx = src.findIndex(c => c.id === dragState.cardId);
+      if (idx === -1) return;
+      const [card] = src.splice(idx, 1);
+      if (!p.phases[targetPhase]) p.phases[targetPhase] = [];
+      p.phases[targetPhase].push(card);
+      save();
+      renderBoard(p);
+      renderPhaseOv(p);
+      const ph = PHASES.find(x => x.id === targetPhase);
+      toast('Verplaatst naar ' + (ph ? ph.label : targetPhase));
+    });
+  });
+}
+
+// ── CARD DETAIL ──
+function openDetail(cardId, phaseId) {
+  const p = getProj(curProjId);
+  if (!p) return;
+  const cards = p.phases[phaseId] || [];
+  const card = cards.find(c => c.id === cardId);
+  if (!card) return;
+  detailState = {
+    projId: curProjId, phaseId, cardId,
+    tags: [...(card.tags||[])],
+    checklist: (card.checklist||[]).map(x => ({...x})),
+    imgData: card.imageData || null
+  };
+  const ph = PHASES.find(x => x.id === phaseId);
+  const typeIcos = {note:'📝', link:'🔗', image:'🖼'};
+  document.getElementById('dpTypeIco').textContent = typeIcos[card.type] || '📝';
+  document.getElementById('dpTitle').value = card.title || '';
+  document.getElementById('dpPrio').value = card.priority || '';
+  document.getElementById('dpDue').value = card.due || '';
+  document.getElementById('dpType').value = card.type || 'note';
+  document.getElementById('dpContent').value = card.content || '';
+  document.getElementById('dpUrl').value = card.url || '';
+  document.getElementById('dpPhaseTag').textContent = ph ? ph.label : '';
+  if (ph) { document.getElementById('dpPhaseTag').style.background = ph.bg; document.getElementById('dpPhaseTag').style.color = ph.color; }
+  const moveEl = document.getElementById('dpMovePhase');
+  moveEl.innerHTML = PHASES.map(x => '<option value="' + x.id + '"' + (x.id === phaseId ? ' selected' : '') + '>' + x.label + '</option>').join('');
+  const imgPrev = document.getElementById('dpImgPreview');
+  if (card.imageData) { imgPrev.src = card.imageData; imgPrev.style.display = 'block'; } else imgPrev.style.display = 'none';
+  updateTypeFields(card.type);
+  renderDetailTags();
+  renderDetailChecklist();
+  document.getElementById('detailOv').classList.add('open');
+}
+
+function updateTypeFields(type) {
+  document.getElementById('dpUrlWrap').style.display = type === 'link' ? 'block' : 'none';
+  document.getElementById('dpImgWrap').style.display = type === 'image' ? 'block' : 'none';
+}
+
+function renderDetailTags() {
+  document.getElementById('dpTagsList').innerHTML = detailState.tags.map(t =>
+    '<div class="dp-tag-item">' + esc(t) + '<button class="dp-tag-rm" data-tag="' + esc(t) + '">✕</button></div>'
+  ).join('');
+}
+function renderDetailChecklist() {
+  document.getElementById('dpChecklist').innerHTML = detailState.checklist.map(item =>
+    '<div class="cl-item">' +
+    '<input type="checkbox" class="cl-cb" ' + (item.done ? 'checked' : '') + ' data-clid="' + item.id + '">' +
+    '<input class="cl-text ' + (item.done ? 'done' : '') + '" value="' + esc(item.text) + '" data-clid="' + item.id + '" readonly>' +
+    '<button class="cl-rm-btn" data-clid="' + item.id + '">✕</button>' +
+    '</div>'
+  ).join('');
+}
+
+function saveDetail() {
+  const p = getProj(detailState.projId);
+  if (!p || !detailState.cardId) return;
+  const curPhase = detailState.phaseId;
+  const targetPhase = document.getElementById('dpMovePhase').value;
+  let cards = p.phases[curPhase] || [];
+  const card = cards.find(c => c.id === detailState.cardId);
+  if (!card) return;
+  card.title = document.getElementById('dpTitle').value.trim();
+  card.priority = document.getElementById('dpPrio').value;
+  card.due = document.getElementById('dpDue').value;
+  card.type = document.getElementById('dpType').value;
+  card.content = document.getElementById('dpContent').value.trim();
+  card.url = document.getElementById('dpUrl').value.trim();
+  card.tags = [...detailState.tags];
+  card.checklist = detailState.checklist.map(x => ({...x}));
+  if (detailState.imgData) card.imageData = detailState.imgData;
+  if (targetPhase !== curPhase) {
+    const idx = cards.findIndex(c => c.id === detailState.cardId);
+    if (idx !== -1) {
+      cards.splice(idx, 1);
+      if (!p.phases[targetPhase]) p.phases[targetPhase] = [];
+      p.phases[targetPhase].push(card);
+    }
+  }
+  save();
+  document.getElementById('detailOv').classList.remove('open');
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast('Kaart opgeslagen');
+}
+
+function deleteCard(cardId, phaseId) {
+  if (!confirm('Kaart verwijderen?')) return;
+  const p = getProj(curProjId);
+  if (!p) return;
+  p.phases[phaseId] = (p.phases[phaseId]||[]).filter(c => c.id !== cardId);
+  save();
+  document.getElementById('detailOv').classList.remove('open');
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast('Kaart verwijderd');
+}
+
+// ── PROJECT CRUD ──
+function openNewProject() {
+  editProjId = null;
+  document.getElementById('mProjTitle').textContent = 'Nieuw project';
+  document.getElementById('pName').value = '';
+  document.getElementById('pDesc').value = '';
+  document.getElementById('pStatus').value = 'active';
+  document.getElementById('pClaudeUrl').value = '';
+  renderEmojiRow(EMOJIS[0]);
+  renderColorRow(COLORS[0]);
+  openModal('modalProj');
+}
+
+function editCurrentProject() {
+  const p = getProj(curProjId);
+  if (!p) return;
+  editProjId = p.id;
+  document.getElementById('mProjTitle').textContent = 'Project bewerken';
+  document.getElementById('pName').value = p.name;
+  document.getElementById('pDesc').value = p.desc || '';
+  document.getElementById('pStatus').value = p.status || 'active';
+  document.getElementById('pClaudeUrl').value = p.claudeUrl || '';
+  renderEmojiRow(p.icon || EMOJIS[0]);
+  renderColorRow(p.color || COLORS[0]);
+  openModal('modalProj');
+}
+
+function renderEmojiRow(sel) {
+  document.getElementById('emojiRow').innerHTML = EMOJIS.map(e =>
+    '<button class="emoji-btn ' + (e === sel ? 'sel' : '') + '" data-emoji="' + e + '">' + e + '</button>'
+  ).join('');
+}
+function renderColorRow(sel) {
+  document.getElementById('colorRow').innerHTML = COLORS.map(c =>
+    '<div class="c-sw ' + (c === sel ? 'sel' : '') + '" style="background:' + c + '" data-color="' + c + '"></div>'
+  ).join('');
+}
+function getSelEmoji() { return document.querySelector('.emoji-btn.sel')?.textContent || '📋'; }
+function getSelColor() { return document.querySelector('.c-sw.sel')?.dataset.color || COLORS[0]; }
+
+function saveProject() {
+  const name = document.getElementById('pName').value.trim();
+  if (!name) { toast('Vul een projectnaam in'); return; }
+  if (editProjId) {
+    const p = getProj(editProjId);
+    p.name = name; p.desc = document.getElementById('pDesc').value.trim();
+    p.status = document.getElementById('pStatus').value;
+    p.color = getSelColor(); p.icon = getSelEmoji();
+    p.claudeUrl = document.getElementById('pClaudeUrl').value.trim();
+    save(); closeModal('modalProj');
+    document.getElementById('boardTitle').innerHTML = p.icon + ' ' + esc(p.name);
+    renderDash(); toast('Project bijgewerkt');
+  } else {
+    const p = {
+      id: uid(), name, desc: document.getElementById('pDesc').value.trim(),
+      status: 'active', color: getSelColor(), icon: getSelEmoji(),
+      claudeUrl: document.getElementById('pClaudeUrl').value.trim(),
+      createdAt: new Date().toISOString(), phases: {}
+    };
+    PHASES.forEach(ph => { p.phases[ph.id] = []; });
+    projects.push(p); save(); closeModal('modalProj');
+    renderDash(); openProject(p.id); toast('Project aangemaakt');
+  }
+}
+
+// ── SEARCH ──
+function doSearch(q) {
+  const el = document.getElementById('searchResults');
+  if (!q.trim()) { el.classList.remove('open'); return; }
+  const qlow = q.toLowerCase();
+  const results = [];
+  projects.forEach(p => {
+    if ((p.name + ' ' + (p.desc||'')).toLowerCase().includes(qlow))
+      results.push({type:'project', label:p.name, meta:'Project', projId:p.id, phaseId:'', cardId:''});
+    PHASES.forEach(ph => {
+      (p.phases[ph.id]||[]).forEach(c => {
+        if (((c.title||'') + (c.content||'') + (c.url||'')).toLowerCase().includes(qlow))
+          results.push({type:'card', label:c.title||c.content?.substring(0,38)||'Kaart', meta:p.name+' → '+ph.label, projId:p.id, phaseId:ph.id, cardId:c.id});
+      });
+    });
+  });
+  if (!results.length) { el.innerHTML = '<div class="sri"><div class="sri-name" style="color:var(--t4)">Geen resultaten</div></div>'; el.classList.add('open'); return; }
+  el.innerHTML = results.slice(0,8).map(r =>
+    '<div class="sri" data-action="searchclick" data-proj="' + r.projId + '" data-phase="' + r.phaseId + '" data-card="' + r.cardId + '">' +
+    '<div class="sri-name">' + (r.type==='project'?'📁 ':'') + esc(r.label) + '</div>' +
+    '<div class="sri-meta">' + esc(r.meta) + '</div></div>'
+  ).join('');
+  el.classList.add('open');
+}
+
+// ── CHAT ──
+function openChatPanel(projId, phaseId) {
+  chatProjId = projId || curProjId;
+  chatPhaseId = phaseId || null;
+  const p = getProj(chatProjId);
+  const ph = phaseId ? PHASES.find(x => x.id === phaseId) : null;
+  document.getElementById('chatCtxLabel').textContent = p ? (p.name + (ph ? ' → ' + ph.label : '')) : 'Geen context';
+  let bar = '';
+  if (p) bar += '<span class="ctx-tag" style="background:' + p.color + '20;color:' + p.color + ';border:1px solid ' + p.color + '40">' + esc(p.name) + '</span>';
+  if (ph) bar += '<span class="ctx-tag" style="background:' + ph.bg + ';color:' + ph.color + ';border:1px solid ' + ph.color + '40">' + ph.label + '</span>';
+  document.getElementById('chatCtxBar').innerHTML = bar || '<span style="color:var(--t4);font-size:11px">Algemeen</span>';
+  document.getElementById('chatPanel').classList.add('open');
+  if (chatHistory.length === 0) addBotMsg(buildGreeting(p, ph));
+}
+
+function closeChatPanel() {
+  document.getElementById('chatPanel').classList.remove('open');
+}
+
+function buildGreeting(p, ph) {
+  if (!p) return 'Hallo Roland — stel een vraag over je projecten of de HAF-methode.';
+  if (!ph) return 'Project **' + p.name + '** is actief. ' + (p.desc ? 'Intentie: "' + p.desc + '". ' : '') + 'Wat wil je bespreken?';
+  return 'Context: **' + p.name + '** / fase **' + ph.label + '**.\n' + ph.desc + '\n\nWat wil je verkennen?';
+}
+
+function buildSysPrompt() {
+  const p = getProj(chatProjId);
+  const ph = chatPhaseId ? PHASES.find(x => x.id === chatPhaseId) : null;
+  let s = 'Je bent een HAF-assistent die Roland Hameeteman helpt. HAF-loop: INTENTIE→OBSERVEREN→PLANNEN→ACTEREN→VALIDEREN→ADAPTEREN. VALIDEREN = altijd menselijk.\n\n';
+  if (p) {
+    s += 'Project: "' + p.name + '"\n';
+    if (p.desc) s += 'Intentie: "' + p.desc + '"\n';
+    const sum = PHASES.map(ph2 => {
+      const cards = (p.phases[ph2.id]||[]);
+      if (!cards.length) return null;
+      return ph2.label + '(' + cards.length + '): ' + cards.map(c => c.title || (c.content||'').substring(0,28) || c.url || '').filter(Boolean).slice(0,3).join(', ');
+    }).filter(Boolean).join('\n');
+    if (sum) s += '\nProjectinhoud:\n' + sum + '\n';
+  }
+  if (ph) {
+    s += '\nActieve fase: ' + ph.label + ' — ' + ph.desc + '\n';
+    const fc = (p && p.phases[ph.id]) || [];
+    if (fc.length) s += fc.map(c => '- [' + c.type + '] ' + (c.title||'') + ' ' + ((c.content||'').substring(0,50)) + ' ' + (c.url||'')).join('\n') + '\n';
+  }
+  s += '\nAntwoord in het Nederlands. Eerste zin = antwoord. Wees direct en concreet.';
+  return s;
+}
+
+async function sendMsg() {
+  if (chatLoading) return;
+  const ta = document.getElementById('chatTa');
+  const msg = ta.value.trim();
+  if (!msg) return;
+  ta.value = ''; ta.style.height = 'auto';
+  addUserMsg(msg);
+  chatHistory.push({role:'user', content:msg});
+  chatLoading = true;
+  document.getElementById('chatSend').disabled = true;
+  const el = addBotMsg('…', true);
+  try {
+    const resp = await fetch(CKPS, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json', 'x-api-key':CKPS_KEY, 'anthropic-version':'2023-06-01'},
+      body: JSON.stringify({model:MODEL, max_tokens:1024, system:buildSysPrompt(), messages:chatHistory.slice(-12)})
+    });
+    if (!resp.ok) { const e = await resp.json().catch(()=>({})); throw new Error(e.error?.message || 'HTTP ' + resp.status); }
+    const data = await resp.json();
+    const reply = data.content?.[0]?.text || 'Geen antwoord ontvangen.';
+    chatHistory.push({role:'assistant', content:reply});
+    el.classList.remove('loading');
+    el.innerHTML = md(reply);
+  } catch(err) {
+    el.classList.remove('loading');
+    el.innerHTML = '<span style="color:#ef4444">⚠ ' + (err.message.includes('fetch') ? 'CKPS niet bereikbaar — start localhost:3800' : esc(err.message)) + '</span>';
+  }
+  chatLoading = false;
+  document.getElementById('chatSend').disabled = false;
+  const msgs = document.getElementById('chatMsgs');
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addUserMsg(t) {
+  const msgs = document.getElementById('chatMsgs');
+  msgs.innerHTML += '<div class="msg user"><div class="msg-av">R</div><div class="msg-bub">' + esc(t) + '</div></div>';
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addBotMsg(t, loading) {
+  const id = 'bm' + uid();
+  const msgs = document.getElementById('chatMsgs');
+  msgs.innerHTML += '<div class="msg" id="' + id + '"><div class="msg-av">⬡</div><div class="msg-bub' + (loading ? ' loading' : '') + '">' + (loading ? t : md(t)) + '</div></div>';
+  msgs.scrollTop = msgs.scrollHeight;
+  return document.querySelector('#' + id + ' .msg-bub');
+}
+
+// ── EVENT DELEGATION ──
+document.addEventListener('click', function(e) {
+  const el = e.target.closest('[data-action]');
+  if (!el) {
+    if (!e.target.closest('.search-wrap')) document.getElementById('searchResults').classList.remove('open');
+    return;
+  }
+  const action = el.dataset.action;
+
+  if (action === 'stopclick') { e.stopPropagation(); return; }
+  if (action === 'openproject') { openProject(el.dataset.id); return; }
+  if (action === 'newproject') { openNewProject(); return; }
+  if (action === 'opendetail') { e.stopPropagation(); openDetail(el.dataset.card, el.dataset.phase); return; }
+  if (action === 'deletecard') { e.stopPropagation(); deleteCard(el.dataset.card, el.dataset.phase); return; }
+  if (action === 'openchat') { openChatPanel(el.dataset.proj, el.dataset.phase); return; }
+  if (action === 'searchclick') {
+    document.getElementById('searchResults').classList.remove('open');
+    document.getElementById('searchInput').value = '';
+    openProject(el.dataset.proj);
+    if (el.dataset.card && el.dataset.phase) setTimeout(() => openDetail(el.dataset.card, el.dataset.phase), 100);
+    return;
+  }
+});
+
+// Detail: tag remove
+document.getElementById('dpTagsList').addEventListener('click', function(e) {
+  const btn = e.target.closest('.dp-tag-rm');
+  if (btn) { const t = btn.dataset.tag; detailState.tags = detailState.tags.filter(x => x !== t); renderDetailTags(); }
+});
+
+// Detail: checklist toggle & remove
+document.getElementById('dpChecklist').addEventListener('change', function(e) {
+  if (e.target.classList.contains('cl-cb')) {
+    const item = detailState.checklist.find(x => x.id === e.target.dataset.clid);
+    if (item) { item.done = e.target.checked; renderDetailChecklist(); }
+  }
+});
+document.getElementById('dpChecklist').addEventListener('click', function(e) {
+  const btn = e.target.closest('.cl-rm-btn');
+  if (btn) { detailState.checklist = detailState.checklist.filter(x => x.id !== btn.dataset.clid); renderDetailChecklist(); }
+});
+
+// Type change
+document.getElementById('dpType').addEventListener('change', function() { updateTypeFields(this.value); });
+
+// Tag add
+document.getElementById('dpTagInput').addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter') return;
+  const v = this.value.trim().toLowerCase();
+  if (v && !detailState.tags.includes(v)) { detailState.tags.push(v); renderDetailTags(); }
+  this.value = '';
+});
+
+// Checklist add
+document.getElementById('clNew').addEventListener('keydown', function(e) {
+  if (e.key !== 'Enter') return;
+  const v = this.value.trim();
+  if (v) { detailState.checklist.push({id:uid(), text:v, done:false}); renderDetailChecklist(); }
+  this.value = '';
+});
+
+// Image upload
+document.getElementById('dpImgInput').addEventListener('change', function() {
+  const f = this.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    detailState.imgData = ev.target.result;
+    const el = document.getElementById('dpImgPreview');
+    el.src = detailState.imgData; el.style.display = 'block';
+  };
+  r.readAsDataURL(f);
+});
+
+// Emoji & color pickers
+document.getElementById('emojiRow').addEventListener('click', function(e) {
+  const btn = e.target.closest('.emoji-btn');
+  if (btn) { document.querySelectorAll('.emoji-btn').forEach(b => b.classList.remove('sel')); btn.classList.add('sel'); }
+});
+document.getElementById('colorRow').addEventListener('click', function(e) {
+  const sw = e.target.closest('.c-sw');
+  if (sw) { document.querySelectorAll('.c-sw').forEach(s => s.classList.remove('sel')); sw.classList.add('sel'); }
+});
+
+// Filter buttons
+document.querySelectorAll('.fb').forEach(btn => {
+  btn.addEventListener('click', function() {
+    curFilter = this.dataset.filter;
+    document.querySelectorAll('.fb').forEach(b => b.classList.remove('active'));
+    this.classList.add('active');
+    const p = getProj(curProjId);
+    if (p) renderBoard(p);
+  });
+});
+
+// View toggle
+document.querySelectorAll('.vt').forEach(btn => {
+  btn.addEventListener('click', function() {
+    dashView = this.dataset.view;
+    renderDash();
+  });
+});
+
+// Static buttons
+document.getElementById('btnNewProj').addEventListener('click', openNewProject);
+document.getElementById('btnBackDash').addEventListener('click', showDash);
+document.getElementById('btnBoardClaude').addEventListener('click', () => openChatPanel(null, null));
+document.getElementById('btnEditProj').addEventListener('click', editCurrentProject);
+document.getElementById('btnCloseDetail').addEventListener('click', () => document.getElementById('detailOv').classList.remove('open'));
+document.getElementById('btnCancelDetail').addEventListener('click', () => document.getElementById('detailOv').classList.remove('open'));
+document.getElementById('btnSaveDetail').addEventListener('click', saveDetail);
+document.getElementById('btnDelCard').addEventListener('click', () => deleteCard(detailState.cardId, detailState.phaseId));
+document.getElementById('btnCloseChat').addEventListener('click', closeChatPanel);
+document.getElementById('btnSaveProj').addEventListener('click', saveProject);
+document.getElementById('btnCancelProj').addEventListener('click', () => closeModal('modalProj'));
+
+// Chat
+document.getElementById('chatSend').addEventListener('click', sendMsg);
+document.getElementById('chatTa').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMsg(); }
+});
+document.getElementById('chatTa').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 110) + 'px';
+});
+
+// Search
+document.getElementById('searchInput').addEventListener('input', function() { doSearch(this.value); });
+document.getElementById('searchInput').addEventListener('focus', function() { if (this.value) doSearch(this.value); });
+
+// Quick add
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && e.target.classList.contains('quick-input') && e.target.dataset.action === 'quickadd') {
+    quickAdd(e.target.dataset.phase, e.target.value);
+    e.target.value = '';
+  }
+});
+
+// Close overlays
+document.getElementById('detailOv').addEventListener('click', function(e) {
+  if (e.target === this) this.classList.remove('open');
+});
+document.querySelectorAll('.modal-ov').forEach(el => {
+  el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+});
+
+// ── SEED ──
+function seedIfEmpty() {
+  if (projects.length) return;
+  projects = [{
+    id: uid(), name: 'HAF Community Platform', icon: '🚀', color: '#3b82f6',
+    desc: 'Platform voor HAF-community van 21 naar 50+ leden — verbinden, leren, co-creëren.',
+    status: 'active', claudeUrl: '', createdAt: new Date().toISOString(),
+    phases: {
+      intentie: [{id:uid(), type:'note', title:'Kernintentie', priority:'high',
+        content:'Actieve HAF community bouwen van 21 naar 50+ leden voor Q3 2026.',
+        tags:['strategie','community'], checklist:[{id:uid(),text:'KPI\'s vaststellen',done:false},{id:uid(),text:'Doelen definiëren',done:true}],
+        createdAt: new Date().toISOString()}],
+      observeren: [
+        {id:uid(), type:'note', title:'21 leden geregistreerd', priority:'mid',
+          content:'Welkomstmail via Google Apps Script verzonden. Engagement nog laag.',
+          tags:['data'], checklist:[], createdAt: new Date().toISOString()},
+        {id:uid(), type:'link', title:'haf.community website',
+          url:'https://haf.community', content:'Live via Netlify — auto-deploy op git push',
+          tags:['tech'], checklist:[], createdAt: new Date().toISOString()}
+      ],
+      plannen: [{id:uid(), type:'note', title:'Groeistrategie opties', priority:'mid',
+        content:'1. Maandelijkse webinar\n2. LinkedIn content strategie\n3. WoCo-gerichte instap',
+        tags:['strategie'], checklist:[{id:uid(),text:'Optie 1 uitwerken',done:false},{id:uid(),text:'LinkedIn strategie',done:false}],
+        createdAt: new Date().toISOString()}],
+      acteren: [], valideren: [], adapteren: []
+    }
+  }];
+  save();
+}
+
+load();
+seedIfEmpty();
+renderDash();
+
+})(); // end IIFE
+</script>
+</body>
+</html>
