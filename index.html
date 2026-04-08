@@ -404,13 +404,17 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 
 <!-- BOOTSTRAP OVERLAY (eerste start: passkey-koppeling) -->
 <div class="modal-ov" id="bootstrapOv">
-  <div class="modal" style="text-align:center;max-width:380px;">
+  <div class="modal" style="text-align:center;max-width:400px;">
     <div style="font-size:32px;margin-bottom:8px;">🔐</div>
     <div class="modal-title">HAF Projects — activeren</div>
     <div class="modal-sub" style="margin-bottom:18px;">Koppel dit apparaat met je passkey. Eenmalig per device.</div>
     <button id="btnBootstrap" class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;font-size:13px;">Activeren met passkey</button>
     <div id="bootstrapMsg" style="margin-top:14px;font-size:11px;color:var(--t3);min-height:14px;"></div>
-    <div style="margin-top:18px;font-size:10px;color:var(--t4);">CKPS · ckps.hafworld.com</div>
+    <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--b1);font-size:10px;color:var(--t4);">
+      Nog geen passkey op dit domein?
+      <button id="btnRegister" class="btn btn-ghost" style="width:100%;justify-content:center;padding:7px;font-size:11px;margin-top:6px;">Registreer nieuwe passkey</button>
+    </div>
+    <div style="margin-top:14px;font-size:10px;color:var(--t4);">CKPS · ckps.hafworld.com</div>
   </div>
 </div>
 
@@ -1421,7 +1425,56 @@ async function runBootstrap() {
   }
 }
 
+async function runRegister() {
+  const msg = document.getElementById('bootstrapMsg');
+  const email = 'roland@hameeteman.com';
+  msg.textContent = 'Passkey registratie starten...';
+  try {
+    const r1 = await fetch(CKPS_BASE + '/auth/passkey/register-begin', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, displayName: 'Roland Hameeteman' })
+    });
+    if (!r1.ok) { const e = await r1.json().catch(()=>({})); throw new Error(e.error || 'register-begin HTTP ' + r1.status); }
+    const opts = await r1.json();
+
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: b64urlToBuf(opts.challenge),
+        rp: opts.rp,
+        user: { ...opts.user, id: b64urlToBuf(opts.user.id) },
+        pubKeyCredParams: opts.pubKeyCredParams,
+        timeout: opts.timeout || 60000,
+        attestation: opts.attestation || 'none',
+        authenticatorSelection: opts.authenticatorSelection,
+        excludeCredentials: (opts.excludeCredentials||[]).map(c => ({ ...c, id: b64urlToBuf(c.id) })),
+      }
+    });
+    if (!cred) throw new Error('Geannuleerd');
+
+    const credPayload = {
+      id: cred.id,
+      rawId: bufToB64url(cred.rawId),
+      type: cred.type,
+      response: {
+        clientDataJSON:    bufToB64url(cred.response.clientDataJSON),
+        attestationObject: bufToB64url(cred.response.attestationObject),
+      },
+      clientExtensionResults: cred.getClientExtensionResults(),
+    };
+    const r2 = await fetch(CKPS_BASE + '/auth/passkey/register-finish', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email, credential: credPayload })
+    });
+    const d = await r2.json();
+    if (!r2.ok) throw new Error(d.error || 'register-finish HTTP ' + r2.status);
+    msg.textContent = '✓ Passkey geregistreerd — klik nu "Activeren"';
+  } catch(e) {
+    msg.textContent = '⚠ ' + (e.message || 'Registratie mislukt');
+  }
+}
+
 document.getElementById('btnBootstrap').addEventListener('click', runBootstrap);
+document.getElementById('btnRegister').addEventListener('click', runRegister);
 
 if (!hasValidToken()) {
   showBootstrap('Klik om dit apparaat te koppelen met je passkey.');
