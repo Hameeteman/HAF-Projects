@@ -2,8 +2,14 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>HAF Projects</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#f7f7fb">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="HAF Projects">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700;800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
@@ -265,6 +271,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
   <div class="sep"></div>
   <div class="breadcrumb" id="breadcrumb"></div>
   <div class="topbar-right">
+    <span id="syncBadge" style="font-family:'Geist Mono',monospace;font-size:10px;padding:3px 8px;border-radius:6px;background:var(--s2);border:1px solid var(--b1);color:var(--t4);">○ lokaal</span>
     <div class="search-wrap">
       <span class="search-ico">⌕</span>
       <input class="search-input" id="searchInput" placeholder="Zoeken...">
@@ -452,8 +459,123 @@ let detailState = {projId:null, phaseId:null, cardId:null, tags:[], checklist:[]
 let dragState = {cardId:null, phaseId:null};
 
 // ── STORAGE ──
-function save() { try { localStorage.setItem(STORE, JSON.stringify(projects)); } catch(e) {} }
+function save() { try { localStorage.setItem(STORE, JSON.stringify(projects)); } catch(e) {} updateSyncBadge(); }
 function load() { try { const d = localStorage.getItem(STORE); if (d) projects = JSON.parse(d); } catch(e) {} }
+
+// ── SYNC LAYER ──
+// Offline-first: mutaties gaan eerst naar localStorage + UI, daarna naar backend.
+// Bij falen wordt de op in een retry-queue gezet die overleeft page reloads.
+const SYNC_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:3800' : 'https://ckps.hafworld.com';
+const PENDING_KEY = 'haf_proj_pending';
+const LAST_SYNC_KEY = 'haf_proj_last_sync';
+let retryTimer = null;
+
+function getPending() { try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); } catch(e) { return []; } }
+function setPending(q) { localStorage.setItem(PENDING_KEY, JSON.stringify(q)); updateSyncBadge(); }
+function hasValidToken() { return CKPS_KEY && CKPS_KEY !== 'CKPS_KEY_PLACEHOLDER'; }
+function syncHeaders() { return { 'Content-Type':'application/json', 'Authorization':'Bearer '+CKPS_KEY }; }
+
+async function apiCall(method, path, body) {
+  if (!hasValidToken() || !navigator.onLine) { throw new Error('offline'); }
+  const r = await fetch(SYNC_BASE + path, {
+    method, headers: syncHeaders(),
+    body: body ? JSON.stringify(body) : undefined,
+    cache: 'no-store'
+  });
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  return r.json();
+}
+
+function enqueue(op) { const q = getPending(); q.push({...op, ts:Date.now()}); setPending(q); scheduleRetry(); }
+
+function scheduleRetry() {
+  if (retryTimer) return;
+  retryTimer = setTimeout(async () => {
+    retryTimer = null;
+    const q = getPending(); if (!q.length) return;
+    const remaining = [];
+    for (const op of q) {
+      try { await apiCall(op.method, op.path, op.body); }
+      catch(e) { remaining.push(op); }
+    }
+    setPending(remaining);
+    if (remaining.length) { retryTimer = setTimeout(scheduleRetry, 15000); }
+  }, 3000);
+}
+
+// Mutatie helpers — wrap elke backend-aanroep in try/queue-on-fail
+async function syncUpsertProject(p) {
+  if (!hasValidToken()) return;
+  const body = { id:p.id, name:p.name, desc:p.desc, status:p.status, icon:p.icon, color:p.color, claudeUrl:p.claudeUrl };
+  try {
+    // Gebruik PUT (update), fallback POST als niet bestaat
+    try { await apiCall('PUT', '/projects/' + p.id, body); }
+    catch(e) { await apiCall('POST', '/projects', body); }
+  } catch(e) { enqueue({ method:'POST', path:'/projects', body }); }
+}
+async function syncDeleteProject(id) {
+  if (!hasValidToken()) return;
+  try { await apiCall('DELETE', '/projects/' + id); }
+  catch(e) { enqueue({ method:'DELETE', path:'/projects/' + id }); }
+}
+async function syncUpsertCard(projectId, card) {
+  if (!hasValidToken()) return;
+  const body = {
+    id:card.id, phase:card.phase, type:card.type, title:card.title,
+    content:card.content, url:card.url, priority:card.priority,
+    dueDate:card.due, tags:card.tags||[], position:card.position||0, fromDesc:!!card.fromDesc
+  };
+  try {
+    try { await apiCall('PUT', '/projects/' + projectId + '/cards/' + card.id, body); }
+    catch(e) { await apiCall('POST', '/projects/' + projectId + '/cards', body); }
+  } catch(e) { enqueue({ method:'POST', path:'/projects/' + projectId + '/cards', body }); }
+}
+async function syncDeleteCard(projectId, cardId) {
+  if (!hasValidToken()) return;
+  try { await apiCall('DELETE', '/projects/' + projectId + '/cards/' + cardId); }
+  catch(e) { enqueue({ method:'DELETE', path:'/projects/' + projectId + '/cards/' + cardId }); }
+}
+
+// Full pull — initial load uit server, merge met local (server wint bij conflict)
+async function fullPull() {
+  if (!hasValidToken() || !navigator.onLine) { updateSyncBadge(); return; }
+  try {
+    const d = await apiCall('GET', '/projects');
+    const byId = {}; projects.forEach(p => byId[p.id] = p);
+    (d.projects||[]).forEach(sp => {
+      const local = byId[sp.id];
+      if (!local || new Date(sp.updatedAt||0) >= new Date(local.updatedAt||0)) {
+        const merged = { ...(local||{}), ...sp, phases: {} };
+        PHASES.forEach(ph => merged.phases[ph.id] = []);
+        (sp.cards||[]).forEach(c => {
+          c.due = c.dueDate; // mapping backend→frontend
+          if (!merged.phases[c.phase]) merged.phases[c.phase] = [];
+          merged.phases[c.phase].push(c);
+        });
+        byId[sp.id] = merged;
+      }
+    });
+    projects = Object.values(byId);
+    localStorage.setItem(STORE, JSON.stringify(projects));
+    localStorage.setItem(LAST_SYNC_KEY, d.serverTime);
+    renderDash();
+    if (curProjId) { const p = getProj(curProjId); if (p) renderBoard(p); }
+    updateSyncBadge();
+  } catch(e) { updateSyncBadge(); }
+}
+
+function updateSyncBadge() {
+  const el = document.getElementById('syncBadge'); if (!el) return;
+  const p = getPending().length;
+  if (!hasValidToken()) { el.textContent = '○ lokaal'; el.style.color = 'var(--t4)'; return; }
+  if (!navigator.onLine) { el.textContent = '○ offline'; el.style.color = 'var(--amber)'; return; }
+  if (p > 0) { el.textContent = '↻ ' + p; el.style.color = 'var(--amber)'; return; }
+  el.textContent = '✓'; el.style.color = 'var(--green)';
+}
+
+window.addEventListener('online', () => { updateSyncBadge(); scheduleRetry(); fullPull(); });
+window.addEventListener('offline', updateSyncBadge);
 
 // ── HELPERS ──
 function uid() { return Math.random().toString(36).substr(2, 9); }
@@ -659,10 +781,11 @@ function quickAdd(phaseId, value) {
   if (!value.trim()) return;
   const p = getProj(curProjId);
   if (!p) return;
-  const card = {id:uid(), type:'note', title:value.trim(), content:'', tags:[], checklist:[], createdAt:new Date().toISOString()};
+  const card = {id:uid(), phase:phaseId, type:'note', title:value.trim(), content:'', tags:[], checklist:[], createdAt:new Date().toISOString()};
   if (!p.phases[phaseId]) p.phases[phaseId] = [];
   p.phases[phaseId].push(card);
   save();
+  syncUpsertCard(p.id, card);
   renderBoard(p);
   renderPhaseOv(p);
   toast('Kaart toegevoegd');
@@ -703,9 +826,11 @@ function setupDragDrop() {
       const idx = src.findIndex(c => c.id === dragState.cardId);
       if (idx === -1) return;
       const [card] = src.splice(idx, 1);
+      card.phase = targetPhase;
       if (!p.phases[targetPhase]) p.phases[targetPhase] = [];
       p.phases[targetPhase].push(card);
       save();
+      syncUpsertCard(p.id, card);
       renderBoard(p);
       renderPhaseOv(p);
       const ph = PHASES.find(x => x.id === targetPhase);
@@ -793,7 +918,9 @@ function saveDetail() {
       p.phases[targetPhase].push(card);
     }
   }
+  card.phase = targetPhase;
   save();
+  syncUpsertCard(p.id, card);
   document.getElementById('detailOv').classList.remove('open');
   renderBoard(p);
   renderPhaseOv(p);
@@ -806,6 +933,7 @@ function deleteCard(cardId, phaseId) {
   if (!p) return;
   p.phases[phaseId] = (p.phases[phaseId]||[]).filter(c => c.id !== cardId);
   save();
+  syncDeleteCard(p.id, cardId);
   document.getElementById('detailOv').classList.remove('open');
   renderBoard(p);
   renderPhaseOv(p);
@@ -855,26 +983,56 @@ function getSelColor() { return document.querySelector('.c-sw.sel')?.dataset.col
 function saveProject() {
   const name = document.getElementById('pName').value.trim();
   if (!name) { toast('Vul een projectnaam in'); return; }
+  const desc = document.getElementById('pDesc').value.trim();
   if (editProjId) {
     const p = getProj(editProjId);
-    p.name = name; p.desc = document.getElementById('pDesc').value.trim();
+    p.name = name; p.desc = desc;
     p.status = document.getElementById('pStatus').value;
     p.color = getSelColor(); p.icon = getSelEmoji();
     p.claudeUrl = document.getElementById('pClaudeUrl').value.trim();
-    save(); closeModal('modalProj');
+    const intentieCard = syncIntentieCard(p, desc);
+    save();
+    syncUpsertProject(p);
+    if (intentieCard) syncUpsertCard(p.id, intentieCard);
+    closeModal('modalProj');
     document.getElementById('boardTitle').innerHTML = p.icon + ' ' + esc(p.name);
-    renderDash(); toast('Project bijgewerkt');
+    renderDash(); if (curProjId===p.id) renderBoard(p); toast('Project bijgewerkt');
   } else {
     const p = {
-      id: uid(), name, desc: document.getElementById('pDesc').value.trim(),
+      id: uid(), name, desc,
       status: 'active', color: getSelColor(), icon: getSelEmoji(),
       claudeUrl: document.getElementById('pClaudeUrl').value.trim(),
       createdAt: new Date().toISOString(), phases: {}
     };
     PHASES.forEach(ph => { p.phases[ph.id] = []; });
-    projects.push(p); save(); closeModal('modalProj');
+    const intentieCard = syncIntentieCard(p, desc);
+    projects.push(p); save();
+    syncUpsertProject(p);
+    if (intentieCard) syncUpsertCard(p.id, intentieCard);
+    closeModal('modalProj');
     renderDash(); openProject(p.id); toast('Project aangemaakt');
   }
+}
+// Synchroniseer de intentie-beschrijving als auto-kaart in de INTENTIE-kolom
+// Retourneert de kaart zodat saveProject 'm kan pushen naar de backend.
+function syncIntentieCard(p, desc) {
+  if (!p.phases) p.phases = {};
+  if (!p.phases.intentie) p.phases.intentie = [];
+  let existing = p.phases.intentie.find(c => c.fromDesc);
+  if (!desc) {
+    if (existing) {
+      p.phases.intentie = p.phases.intentie.filter(c => !c.fromDesc);
+      syncDeleteCard(p.id, existing.id);
+    }
+    return null;
+  }
+  if (existing) { existing.content = desc; existing.updatedAt = new Date().toISOString(); return existing; }
+  const card = {
+    id: uid(), phase:'intentie', type:'note', title:'Kernintentie', priority:'high',
+    content: desc, fromDesc: true, createdAt: new Date().toISOString()
+  };
+  p.phases.intentie.unshift(card);
+  return card;
 }
 
 // ── SEARCH ──
@@ -1175,6 +1333,16 @@ function seedIfEmpty() {
 load();
 seedIfEmpty();
 renderDash();
+updateSyncBadge();
+fullPull();                // initial sync bij start (non-blocking)
+scheduleRetry();           // verwerk eventuele pending ops uit vorige sessie
+
+// Service worker registratie (PWA)
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js').catch(()=>{});
+  });
+}
 
 })(); // end IIFE
 </script>

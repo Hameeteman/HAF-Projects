@@ -1,0 +1,16 @@
+{
+  "name": "HAF Projects",
+  "short_name": "HAF Projects",
+  "description": "Kanban voor HAF projecten volgens de HAF-loop",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f7f7fb",
+  "theme_color": "#f7f7fb",
+  "lang": "nl",
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
