@@ -28,10 +28,13 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  // Nooit API of Claude proxy cachen
-  if (url.hostname.includes('ckps.hafworld.com') || url.hostname === 'localhost' && url.port === '3800') {
-    return; // laat browser z'n gang gaan
-  }
+  // Nooit API of Claude proxy cachen — alle ckps.hafworld.com en /v1/, /projects, /apps/haf-projects/bootstrap, /auth/passkey
+  const isApi = url.hostname.includes('ckps.hafworld.com') &&
+                (url.pathname.startsWith('/v1/') ||
+                 url.pathname.startsWith('/projects') ||
+                 url.pathname.startsWith('/auth/') ||
+                 url.pathname.endsWith('/bootstrap'));
+  if (isApi) return;
   if (e.request.method !== 'GET') return;
 
   e.respondWith(

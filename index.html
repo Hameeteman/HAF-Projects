@@ -402,6 +402,18 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
   </div>
 </div>
 
+<!-- BOOTSTRAP OVERLAY (eerste start: passkey-koppeling) -->
+<div class="modal-ov" id="bootstrapOv">
+  <div class="modal" style="text-align:center;max-width:380px;">
+    <div style="font-size:32px;margin-bottom:8px;">🔐</div>
+    <div class="modal-title">HAF Projects — activeren</div>
+    <div class="modal-sub" style="margin-bottom:18px;">Koppel dit apparaat met je passkey. Eenmalig per device.</div>
+    <button id="btnBootstrap" class="btn btn-primary" style="width:100%;justify-content:center;padding:10px;font-size:13px;">Activeren met passkey</button>
+    <div id="bootstrapMsg" style="margin-top:14px;font-size:11px;color:var(--t3);min-height:14px;"></div>
+    <div style="margin-top:18px;font-size:10px;color:var(--t4);">CKPS · ckps.hafworld.com</div>
+  </div>
+</div>
+
 <!-- MODAL PROJECT -->
 <div class="modal-ov" id="modalProj">
   <div class="modal">
@@ -429,8 +441,12 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 'use strict';
 
 // ── CONSTANTS ──
-const CKPS = 'https://ckps.hafworld.com/v1/messages';
-const CKPS_KEY = 'CKPS_KEY_PLACEHOLDER';
+// CKPS-token wordt via passkey-bootstrap binnengehaald (Optie C).
+// Bij eerste start: passkey-flow → token → localStorage. Daarna automatisch.
+const CKPS_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:3800' : 'https://ckps.hafworld.com';
+const CKPS = CKPS_BASE + '/v1/messages';
+let CKPS_KEY = localStorage.getItem('haf_ckps_token') || 'CKPS_KEY_PLACEHOLDER';
 const MODEL = 'claude-opus-4-6';
 const STORE = 'haf_proj_v2';
 
@@ -1334,8 +1350,85 @@ load();
 seedIfEmpty();
 renderDash();
 updateSyncBadge();
-fullPull();                // initial sync bij start (non-blocking)
-scheduleRetry();           // verwerk eventuele pending ops uit vorige sessie
+
+// ── BOOTSTRAP — eerste start of na token-clear: koppel device via passkey ──
+function showBootstrap(msg) {
+  document.getElementById('bootstrapOv').classList.add('open');
+  if (msg) document.getElementById('bootstrapMsg').textContent = msg;
+}
+function hideBootstrap() { document.getElementById('bootstrapOv').classList.remove('open'); }
+
+function b64urlToBuf(s) {
+  s = s.replace(/-/g,'+').replace(/_/g,'/'); while (s.length % 4) s += '=';
+  const b = atob(s); const u = new Uint8Array(b.length);
+  for (let i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u.buffer;
+}
+function bufToB64url(buf) {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i=0;i<b.length;i++) s += String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+async function runBootstrap() {
+  if (!('credentials' in navigator)) { showBootstrap('Dit apparaat ondersteunt geen passkeys.'); return; }
+  const msg = document.getElementById('bootstrapMsg');
+  msg.textContent = 'Bezig...';
+  try {
+    // 1. Vraag challenge bij CKPS
+    const r1 = await fetch(CKPS_BASE + '/auth/passkey/login-begin', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    if (!r1.ok) throw new Error('login-begin: HTTP ' + r1.status);
+    const opts = await r1.json();
+
+    // 2. WebAuthn assertion
+    const cred = await navigator.credentials.get({
+      publicKey: {
+        challenge: b64urlToBuf(opts.challenge),
+        rpId: opts.rpId,
+        userVerification: opts.userVerification || 'preferred',
+        timeout: opts.timeout || 60000,
+        allowCredentials: (opts.allowCredentials||[]).map(c => ({ ...c, id: b64urlToBuf(c.id) })),
+      }
+    });
+    if (!cred) throw new Error('Geannuleerd');
+
+    // 3. Bootstrap call met assertion
+    const credPayload = {
+      id: cred.id,
+      rawId: bufToB64url(cred.rawId),
+      type: cred.type,
+      response: {
+        clientDataJSON:    bufToB64url(cred.response.clientDataJSON),
+        authenticatorData: bufToB64url(cred.response.authenticatorData),
+        signature:         bufToB64url(cred.response.signature),
+        userHandle:        cred.response.userHandle ? bufToB64url(cred.response.userHandle) : null,
+      },
+      clientExtensionResults: cred.getClientExtensionResults(),
+    };
+    const r3 = await fetch(CKPS_BASE + '/apps/haf-projects/bootstrap', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ challengeId: opts.challengeId, credential: credPayload })
+    });
+    const data = await r3.json();
+    if (!r3.ok) throw new Error(data.error || 'HTTP ' + r3.status);
+
+    // 4. Token opslaan + verder
+    localStorage.setItem('haf_ckps_token', data.token);
+    CKPS_KEY = data.token;
+    msg.textContent = '✓ Gekoppeld als ' + data.email;
+    setTimeout(() => { hideBootstrap(); fullPull(); scheduleRetry(); updateSyncBadge(); }, 600);
+  } catch(e) {
+    msg.textContent = '⚠ ' + (e.message || 'Onbekende fout');
+  }
+}
+
+document.getElementById('btnBootstrap').addEventListener('click', runBootstrap);
+
+if (!hasValidToken()) {
+  showBootstrap('Klik om dit apparaat te koppelen met je passkey.');
+} else {
+  fullPull();
+  scheduleRetry();
+}
 
 // Service worker registratie (PWA)
 if ('serviceWorker' in navigator) {

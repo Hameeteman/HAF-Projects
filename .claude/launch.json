@@ -1,0 +1,12 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "haf-projects",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["--yes", "http-server", "--silent"],
+      "port": 8080,
+      "autoPort": true
+    }
+  ]
+}

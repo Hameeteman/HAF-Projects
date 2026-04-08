@@ -2,7 +2,7 @@
   "name": "HAF Projects",
   "short_name": "HAF Projects",
   "description": "Kanban voor HAF projecten volgens de HAF-loop",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
