@@ -297,6 +297,37 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 .import-item-meta{font-size:10px;color:var(--t3);font-family:'Geist Mono',monospace;margin-top:2px;}
 .import-bar{display:flex;align-items:center;gap:8px;padding:12px 0 0;border-top:1px solid var(--b1);margin-top:12px;}
 .import-count{font-size:11px;color:var(--t2);font-family:'Geist Mono',monospace;}
+/* AGENDA STRIP + VIEW */
+.agenda-strip{padding:0 22px 10px;flex-shrink:0;display:none;}
+.agenda-strip.has{display:block;}
+.agenda-strip-title{font-size:10px;font-weight:700;letter-spacing:.08em;color:var(--t3);margin-bottom:6px;display:flex;align-items:center;gap:6px;cursor:pointer;}
+.agenda-strip-title:hover{color:var(--t1);}
+.agenda-days{display:flex;gap:4px;overflow-x:auto;padding-bottom:2px;}
+.agenda-day{min-width:90px;padding:6px 8px;border:1px solid var(--b1);border-radius:var(--rs);background:var(--s1);flex-shrink:0;cursor:pointer;transition:all .12s;}
+.agenda-day:hover{border-color:var(--b2);background:var(--s3);}
+.agenda-day-label{font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--t3);font-family:'Geist Mono',monospace;margin-bottom:3px;}
+.agenda-day.today .agenda-day-label{color:var(--ci);}
+.agenda-day-items{display:flex;flex-direction:column;gap:2px;}
+.agenda-chip{font-size:10px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:1px 0;}
+.agenda-chip.overdue{color:var(--red);}
+.agenda-chip.urgent{color:var(--amber);}
+.agenda-day-more{font-size:9px;color:var(--t4);font-family:'Geist Mono',monospace;}
+.agenda-empty{font-size:11px;color:var(--t4);padding:4px 0;}
+/* Full agenda view */
+.agenda-full{display:none;padding:0 22px 22px;}
+.agenda-full.open{display:block;}
+.agenda-section{margin-bottom:14px;}
+.agenda-section-title{font-size:11px;font-weight:700;color:var(--t2);padding:6px 0 4px;border-bottom:1px solid var(--b1);margin-bottom:6px;display:flex;align-items:center;gap:6px;}
+.agenda-row{display:flex;align-items:center;gap:10px;padding:7px 10px;border:1px solid var(--b1);border-radius:var(--rs);background:var(--s1);margin-bottom:4px;cursor:pointer;transition:all .12s;}
+.agenda-row:hover{background:var(--s3);border-color:var(--b2);}
+.agenda-row-due{font-size:10px;font-family:'Geist Mono',monospace;min-width:50px;flex-shrink:0;}
+.agenda-row-due.overdue{color:var(--red);font-weight:600;}
+.agenda-row-due.urgent{color:var(--amber);}
+.agenda-row-due.soon{color:var(--amber);opacity:.7;}
+.agenda-row-due.ok{color:var(--t4);}
+.agenda-row-title{font-size:13px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.agenda-row-proj{font-size:10px;color:var(--t3);font-family:'Geist Mono',monospace;flex-shrink:0;}
+.agenda-row-phase{font-size:9px;font-weight:600;padding:1px 5px;border-radius:3px;flex-shrink:0;}
 .form-group{margin-bottom:13px;}
 .form-label{display:block;font-size:11px;font-weight:500;color:var(--t2);margin-bottom:5px;letter-spacing:.03em;}
 .form-input,.form-ta,.form-select{width:100%;padding:8px 10px;background:var(--s3);border:1px solid var(--b2);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:13px;outline:none;transition:border-color .12s;}
@@ -340,10 +371,16 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
       <div class="view-toggle">
         <div class="vt active" id="vtGrid" data-view="grid">▦ Grid</div>
         <div class="vt" id="vtList" data-view="list">≡ Lijst</div>
+        <div class="vt" id="vtAgenda" data-view="agenda">📅 Agenda</div>
       </div>
     </div>
   </div>
+  <div class="agenda-strip" id="agendaStrip">
+    <div class="agenda-strip-title" id="agendaStripTitle" onclick="toggleAgendaView()">📅 Binnenkort <span style="font-weight:400;font-size:9px;">→ volledig overzicht</span></div>
+    <div class="agenda-days" id="agendaDays"></div>
+  </div>
   <div class="dash-scroll">
+    <div class="agenda-full" id="agendaFull"></div>
     <div id="projContainer"></div>
   </div>
 </div>
@@ -814,6 +851,121 @@ function md(t) {
     .replace(/\n/g,'<br>');
 }
 
+// ── AGENDA — deadline overzicht over alle projecten ──
+function getAllDueCards() {
+  const cards = [];
+  projects.forEach(p => {
+    if (p.status === 'done' && !showArchived) return;
+    PHASES.forEach(ph => {
+      (p.phases[ph.id]||[]).forEach(c => {
+        if (c.due) cards.push({ ...c, projId: p.id, projName: p.name, projIcon: p.icon || '📋', phaseName: ph.label, phaseColor: ph.color, phaseBg: ph.bg });
+      });
+    });
+  });
+  cards.sort((a, b) => new Date(a.due) - new Date(b.due));
+  return cards;
+}
+
+function renderAgendaStrip() {
+  const cards = getAllDueCards();
+  const strip = document.getElementById('agendaStrip');
+  const daysEl = document.getElementById('agendaDays');
+  if (!cards.length) { strip.classList.remove('has'); return; }
+  strip.classList.add('has');
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dayNames = ['zo','ma','di','wo','do','vr','za'];
+
+  // Groepeer per dag, 7 dagen vooruit + verlopen
+  let html = '';
+  // Eerst verlopen items
+  const overdue = cards.filter(c => new Date(c.due) < today);
+  if (overdue.length) {
+    html += '<div class="agenda-day" onclick="toggleAgendaView()" style="border-color:var(--red);border-width:1.5px;">' +
+      '<div class="agenda-day-label" style="color:var(--red)">VERLOPEN</div>' +
+      '<div class="agenda-day-items">' +
+      overdue.slice(0,3).map(c => '<div class="agenda-chip overdue">' + esc(c.title||'').substring(0,18) + '</div>').join('') +
+      (overdue.length > 3 ? '<div class="agenda-day-more">+' + (overdue.length-3) + ' meer</div>' : '') +
+      '</div></div>';
+  }
+
+  // 7 dagen vooruit
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today); d.setDate(d.getDate() + i);
+    const ds = d.toISOString().substring(0, 10);
+    const dayCards = cards.filter(c => c.due.substring(0, 10) === ds);
+    if (!dayCards.length && i > 2) continue; // lege dagen na 3 dagen overslaan
+    const label = i === 0 ? 'VANDAAG' : i === 1 ? 'MORGEN' : dayNames[d.getDay()] + ' ' + d.getDate();
+    html += '<div class="agenda-day' + (i === 0 ? ' today' : '') + '" onclick="toggleAgendaView()">' +
+      '<div class="agenda-day-label">' + label + '</div>' +
+      '<div class="agenda-day-items">' +
+      (dayCards.length ? dayCards.slice(0,3).map(c =>
+        '<div class="agenda-chip' + (i === 0 ? ' urgent' : '') + '">' + esc(c.title||'').substring(0,18) + '</div>'
+      ).join('') + (dayCards.length > 3 ? '<div class="agenda-day-more">+' + (dayCards.length-3) + ' meer</div>' : '')
+      : '<div class="agenda-empty">—</div>') +
+      '</div></div>';
+  }
+
+  daysEl.innerHTML = html;
+}
+
+function toggleAgendaView() {
+  if (dashView === 'agenda') { dashView = 'grid'; } else { dashView = 'agenda'; }
+  renderDash();
+}
+
+function renderAgendaFull() {
+  const cards = getAllDueCards();
+  const el = document.getElementById('agendaFull');
+  if (!cards.length) { el.innerHTML = '<div style="text-align:center;color:var(--t4);padding:30px;font-size:13px;">Geen kaarten met vervaldatum</div>'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+
+  // Groepeer: verlopen, vandaag, morgen, deze week, volgende week, later
+  const groups = [
+    { label: '🔴 Verlopen', cards: [], cls: 'overdue' },
+    { label: '🟠 Vandaag', cards: [], cls: 'urgent' },
+    { label: '🟡 Morgen', cards: [], cls: 'soon' },
+    { label: '📅 Deze week', cards: [], cls: 'ok' },
+    { label: '📅 Volgende week', cards: [], cls: 'ok' },
+    { label: '📅 Later', cards: [], cls: 'ok' },
+  ];
+
+  const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
+  const weekEnd = new Date(today); weekEnd.setDate(weekEnd.getDate() + (7 - weekEnd.getDay()));
+  const nextWeekEnd = new Date(weekEnd); nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
+
+  cards.forEach(c => {
+    const d = new Date(c.due);
+    if (d < today) groups[0].cards.push(c);
+    else if (d.toDateString() === today.toDateString()) groups[1].cards.push(c);
+    else if (d.toDateString() === tomorrow.toDateString()) groups[2].cards.push(c);
+    else if (d < weekEnd) groups[3].cards.push(c);
+    else if (d < nextWeekEnd) groups[4].cards.push(c);
+    else groups[5].cards.push(c);
+  });
+
+  let html = '';
+  groups.forEach(g => {
+    if (!g.cards.length) return;
+    html += '<div class="agenda-section">' +
+      '<div class="agenda-section-title">' + g.label + ' <span style="font-family:Geist Mono,monospace;font-size:9px;color:var(--t4);">' + g.cards.length + '</span></div>';
+    g.cards.forEach(c => {
+      const dueDate = new Date(c.due);
+      const dueTxt = dueDate.toLocaleDateString('nl-NL', { day:'2-digit', month:'short' });
+      html += '<div class="agenda-row" data-action="agendaclick" data-proj="' + c.projId + '" data-phase="' + (c.phase||'intentie') + '" data-card="' + c.id + '">' +
+        '<div class="agenda-row-due ' + g.cls + '">' + dueTxt + '</div>' +
+        '<div class="agenda-row-title">' + esc(c.title || 'Naamloos') + '</div>' +
+        '<div class="agenda-row-phase" style="background:' + (c.phaseBg||'var(--s3)') + ';color:' + (c.phaseColor||'var(--t3)') + '">' + esc(c.phaseName||'') + '</div>' +
+        '<div class="agenda-row-proj">' + (c.projIcon||'📋') + ' ' + esc(c.projName||'') + '</div>' +
+        '</div>';
+    });
+    html += '</div>';
+  });
+
+  el.innerHTML = html;
+}
+
 // ── DASHBOARD ──
 let showArchived = false;
 
@@ -833,6 +985,21 @@ function renderDash() {
   lbl.textContent = visible.length + ' project' + (visible.length !== 1 ? 'en' : '') + (archivedCount > 0 && !showArchived ? ' · ' + archivedCount + ' gearchiveerd' : '');
   document.getElementById('vtGrid').classList.toggle('active', dashView === 'grid');
   document.getElementById('vtList').classList.toggle('active', dashView === 'list');
+  document.getElementById('vtAgenda').classList.toggle('active', dashView === 'agenda');
+
+  // Agenda strip altijd renderen (tenzij agenda-view open)
+  renderAgendaStrip();
+  const agendaFull = document.getElementById('agendaFull');
+  const projContainer = document.getElementById('projContainer');
+  if (dashView === 'agenda') {
+    agendaFull.classList.add('open');
+    projContainer.style.display = 'none';
+    document.getElementById('agendaStrip').classList.remove('has'); // verberg strip in full view
+    renderAgendaFull();
+    return;
+  }
+  agendaFull.classList.remove('open');
+  projContainer.style.display = '';
 
   const archBtn = document.getElementById('btnShowArchived');
   archBtn.classList.toggle('active', showArchived);
@@ -1666,6 +1833,11 @@ document.addEventListener('click', function(e) {
   if (action === 'deletecard') { e.stopPropagation(); deleteCard(el.dataset.card, el.dataset.phase); return; }
   if (action === 'openchat') { openChatPanel(el.dataset.proj, el.dataset.phase); return; }
   if (action === 'openimport') { e.stopPropagation(); openImportOverlay(); return; }
+  if (action === 'agendaclick') {
+    openProject(el.dataset.proj);
+    setTimeout(() => openDetail(el.dataset.card, el.dataset.phase), 150);
+    return;
+  }
   if (action === 'pickphoto') { e.stopPropagation(); const fi = document.getElementById('addimgfile-' + el.dataset.phase); fi.removeAttribute('capture'); fi.click(); return; }
   if (action === 'takephoto') { e.stopPropagation(); const fi = document.getElementById('addimgfile-' + el.dataset.phase); fi.setAttribute('capture','environment'); fi.click(); return; }
   if (action === 'toggleadd') { e.stopPropagation(); toggleAddInline(el.dataset.phase); return; }
