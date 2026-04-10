@@ -632,7 +632,16 @@ const PENDING_KEY = 'haf_proj_pending';
 const LAST_SYNC_KEY = 'haf_proj_last_sync';
 let retryTimer = null;
 
-function getPending() { try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); } catch(e) { return []; } }
+function getPending() {
+  try {
+    const q = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    // Verwijder ops ouder dan 1 uur (stale retries die nooit zullen slagen)
+    const cutoff = Date.now() - (60 * 60 * 1000);
+    const fresh = q.filter(op => (op.ts || 0) > cutoff);
+    if (fresh.length !== q.length) setPending(fresh);
+    return fresh;
+  } catch(e) { return []; }
+}
 function setPending(q) { localStorage.setItem(PENDING_KEY, JSON.stringify(q)); updateSyncBadge(); }
 function hasValidToken() { return CKPS_KEY && CKPS_KEY !== 'CKPS_KEY_PLACEHOLDER'; }
 function syncHeaders() { return { 'Content-Type':'application/json', 'Authorization':'Bearer '+CKPS_KEY }; }
