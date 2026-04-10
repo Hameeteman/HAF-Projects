@@ -929,14 +929,15 @@ function renderBoard(p) {
 // Groepeer kaarten per type — alleen als het overzichtelijker is (3+ kaarten, 2+ typen)
 function renderGroupedCards(cards, phaseId) {
   if (!cards.length) return '';
-  const typeOrder = ['note','link','article','video','image'];
-  const typeLabels = {note:'Notities', link:'Links', article:'Artikelen', video:'Video', image:'Afbeeldingen'};
-  const typeIcos = {note:'📝', link:'🔗', article:'📄', video:'🎬', image:'🖼'};
+  const typeOrder = ['task','note','link','article','video','image'];
+  const typeLabels = {task:'Taken', note:'Notities', link:'Links', article:'Artikelen', video:'Video', image:'Afbeeldingen'};
+  const typeIcos = {task:'☑', note:'📝', link:'🔗', article:'📄', video:'🎬', image:'🖼'};
 
-  // Bepaal effectief type (link+tag:video → video, link+tag:artikel → article)
+  // Bepaal effectief type (tags bepalen subtype)
   function effectiveType(c) {
     const t = c.type || 'note';
-    if (t === 'link' && c.tags) {
+    if (c.tags) {
+      if (c.tags.includes('google-tasks') || c.tags.includes('ms-todo')) return 'task';
       if (c.tags.includes('video')) return 'video';
       if (c.tags.includes('artikel')) return 'article';
     }
