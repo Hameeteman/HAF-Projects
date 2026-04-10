@@ -6,7 +6,7 @@
 <title>HAF Projects</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#f7f7fb">
-<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="HAF Projects">
 <link rel="apple-touch-icon" href="./icons/icon-192.png">
@@ -1745,6 +1745,10 @@ const MS_CLIENT_ID = 'MS_CLIENT_ID_PLACEHOLDER';         // van Azure App Regist
 let googleAccessToken = null;
 let msAccessToken = null;
 let importSelected = new Set();
+
+// Expose import functies op window (nodig voor onclick in dynamische HTML)
+window.switchImportTab = switchImportTab;
+window.toggleImportItem = toggleImportItem;
 
 function switchImportTab(tab) {
   document.querySelectorAll('.import-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
