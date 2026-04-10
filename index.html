@@ -408,9 +408,12 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
         </div>
         <div id="dpImgWrap" style="display:none;margin-top:8px">
           <img id="dpImgPreview" style="width:100%;max-height:170px;object-fit:cover;border-radius:var(--rs);display:none;margin-bottom:6px;">
-          <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--t2);">
-            <input type="file" accept="image/*" id="dpImgInput" style="display:none"> 📎 Kies afbeelding
-          </label>
+          <input type="file" accept="image/*" id="dpImgInput" style="display:none">
+          <input type="file" accept="image/*" capture="environment" id="dpImgCapture" style="display:none">
+          <div style="display:flex;gap:4px;">
+            <label class="btn btn-ghost" style="flex:1;justify-content:center;font-size:11px;cursor:pointer;" onclick="document.getElementById('dpImgInput').click()">📷 Foto kiezen</label>
+            <label class="btn btn-ghost" style="flex:1;justify-content:center;font-size:11px;cursor:pointer;" onclick="document.getElementById('dpImgCapture').click()">📸 Camera</label>
+          </div>
         </div>
       </div>
       <div>
@@ -910,6 +913,14 @@ function renderBoard(p) {
       '<input id="addtitle-' + ph.id + '" placeholder="Titel..." data-phase="' + ph.id + '">' +
       '<input id="addurl-' + ph.id + '" placeholder="URL (optioneel)" data-phase="' + ph.id + '" style="display:none;">' +
       '<textarea id="addcontent-' + ph.id + '" placeholder="Notitie..." data-phase="' + ph.id + '" style="display:none;"></textarea>' +
+      '<div id="addimg-' + ph.id + '" style="display:none;">' +
+      '<input type="file" accept="image/*" id="addimgfile-' + ph.id + '" style="display:none;" data-phase="' + ph.id + '">' +
+      '<div style="display:flex;gap:4px;margin-bottom:5px;">' +
+      '<button class="btn btn-ghost" style="flex:1;font-size:11px;padding:6px;justify-content:center;" data-action="pickphoto" data-phase="' + ph.id + '">📷 Foto kiezen</button>' +
+      '<button class="btn btn-ghost" style="flex:1;font-size:11px;padding:6px;justify-content:center;" data-action="takephoto" data-phase="' + ph.id + '">📸 Camera</button>' +
+      '</div>' +
+      '<img id="addimgpreview-' + ph.id + '" style="width:100%;max-height:120px;object-fit:cover;border-radius:var(--rs);display:none;margin-bottom:5px;">' +
+      '</div>' +
       '<div class="add-inline-btns">' +
       '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" data-action="canceladd" data-phase="' + ph.id + '">Annuleer</button>' +
       '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px" data-action="submitadd" data-phase="' + ph.id + '">Toevoegen</button>' +
@@ -1106,9 +1117,11 @@ function setAddType(phaseId, type) {
   document.getElementById('addtype-' + phaseId).textContent = cfg.ico + ' ' + cfg.label;
   const urlEl = document.getElementById('addurl-' + phaseId);
   const contentEl = document.getElementById('addcontent-' + phaseId);
+  const imgEl = document.getElementById('addimg-' + phaseId);
   urlEl.style.display = cfg.showUrl ? 'block' : 'none';
   urlEl.placeholder = cfg.urlPlaceholder;
   contentEl.style.display = cfg.showContent ? 'block' : 'none';
+  if (imgEl) imgEl.style.display = type === 'image' ? 'block' : 'none';
   // Highlight geselecteerde type-knop
   document.querySelectorAll('[data-action="setaddtype"][data-phase="' + phaseId + '"]').forEach(btn => {
     btn.style.background = btn.dataset.type === type ? 'var(--s4)' : '';
@@ -1116,12 +1129,37 @@ function setAddType(phaseId, type) {
   });
 }
 
+let addImgData = {}; // per phase: base64 image data van gekozen foto
+
 function cancelAdd(phaseId) {
   document.getElementById('addinline-' + phaseId).classList.remove('open');
   document.getElementById('addtitle-' + phaseId).value = '';
   document.getElementById('addurl-' + phaseId).value = '';
   document.getElementById('addcontent-' + phaseId).value = '';
+  delete addImgData[phaseId];
+  const prev = document.getElementById('addimgpreview-' + phaseId);
+  if (prev) { prev.style.display = 'none'; prev.src = ''; }
 }
+
+// File input change handler (delegated via document)
+document.addEventListener('change', function(e) {
+  if (!e.target.id || !e.target.id.startsWith('addimgfile-')) return;
+  const phaseId = e.target.dataset.phase;
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(ev) {
+    addImgData[phaseId] = ev.target.result;
+    const prev = document.getElementById('addimgpreview-' + phaseId);
+    if (prev) { prev.src = ev.target.result; prev.style.display = 'block'; }
+    // Auto-fill titel als leeg
+    const titleEl = document.getElementById('addtitle-' + phaseId);
+    if (titleEl && !titleEl.value.trim()) {
+      titleEl.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+    }
+  };
+  reader.readAsDataURL(file);
+});
 
 function submitAdd(phaseId) {
   const p = getProj(curProjId);
@@ -1130,15 +1168,17 @@ function submitAdd(phaseId) {
   const title = document.getElementById('addtitle-' + phaseId).value.trim();
   const url = document.getElementById('addurl-' + phaseId).value.trim();
   const content = document.getElementById('addcontent-' + phaseId).value.trim();
-  if (!title && !url && !content) { toast('Vul minimaal een titel of URL in'); return; }
+  const imgData = addImgData[phaseId] || null;
+  if (!title && !url && !content && !imgData) { toast('Vul minimaal een titel, URL of foto in'); return; }
 
   const card = {
     id: uid(), phase: phaseId, type: (type === 'video' || type === 'article') ? 'link' : type,
-    title: title || (url ? truncUrl(url) : 'Naamloos'),
+    title: title || (url ? truncUrl(url) : imgData ? 'Screenshot ' + new Date().toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}) : 'Naamloos'),
     content: content, url: url, priority: '',
     tags: type === 'video' ? ['video'] : type === 'article' ? ['artikel'] : [],
     checklist: [], createdAt: new Date().toISOString()
   };
+  if (imgData) card.imageData = imgData;
 
   if (!p.phases[phaseId]) p.phases[phaseId] = [];
   p.phases[phaseId].push(card);
@@ -1589,6 +1629,8 @@ document.addEventListener('click', function(e) {
   if (action === 'deletecard') { e.stopPropagation(); deleteCard(el.dataset.card, el.dataset.phase); return; }
   if (action === 'openchat') { openChatPanel(el.dataset.proj, el.dataset.phase); return; }
   if (action === 'openimport') { e.stopPropagation(); openImportOverlay(); return; }
+  if (action === 'pickphoto') { e.stopPropagation(); const fi = document.getElementById('addimgfile-' + el.dataset.phase); fi.removeAttribute('capture'); fi.click(); return; }
+  if (action === 'takephoto') { e.stopPropagation(); const fi = document.getElementById('addimgfile-' + el.dataset.phase); fi.setAttribute('capture','environment'); fi.click(); return; }
   if (action === 'toggleadd') { e.stopPropagation(); toggleAddInline(el.dataset.phase); return; }
   if (action === 'setaddtype') { e.stopPropagation(); setAddType(el.dataset.phase, el.dataset.type); return; }
   if (action === 'canceladd') { e.stopPropagation(); cancelAdd(el.dataset.phase); return; }
@@ -1647,16 +1689,21 @@ document.getElementById('clNew').addEventListener('keydown', function(e) {
 });
 
 // Image upload
-document.getElementById('dpImgInput').addEventListener('change', function() {
-  const f = this.files[0]; if (!f) return;
+function handleDetailImgUpload(fileInput) {
+  const f = fileInput.files[0]; if (!f) return;
   const r = new FileReader();
   r.onload = ev => {
     detailState.imgData = ev.target.result;
     const el = document.getElementById('dpImgPreview');
     el.src = detailState.imgData; el.style.display = 'block';
+    // Auto-switch type naar image
+    document.getElementById('dpType').value = 'image';
+    updateTypeFields('image');
   };
   r.readAsDataURL(f);
-});
+}
+document.getElementById('dpImgInput').addEventListener('change', function() { handleDetailImgUpload(this); });
+document.getElementById('dpImgCapture').addEventListener('change', function() { handleDetailImgUpload(this); });
 
 // Emoji & color pickers
 document.getElementById('emojiRow').addEventListener('click', function(e) {
