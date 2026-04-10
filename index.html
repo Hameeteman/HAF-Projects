@@ -308,9 +308,11 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 .agenda-day-label{font-size:9px;font-weight:700;letter-spacing:.06em;color:var(--t3);font-family:'Geist Mono',monospace;margin-bottom:3px;}
 .agenda-day.today .agenda-day-label{color:var(--ci);}
 .agenda-day-items{display:flex;flex-direction:column;gap:2px;}
-.agenda-chip{font-size:10px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:1px 0;}
-.agenda-chip.overdue{color:var(--red);}
-.agenda-chip.urgent{color:var(--amber);}
+.agenda-chip{font-size:10px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;padding:2px 6px;border-radius:3px;border-left:3px solid var(--b2);background:var(--s2);}
+.agenda-chip.overdue{border-left-color:var(--red);color:var(--red);background:var(--red-bg);}
+.agenda-chip.urgent{border-left-color:var(--amber);color:#92400e;background:var(--amber-bg);}
+.agenda-chip.soon{border-left-color:var(--amber);color:var(--t2);background:rgba(245,158,11,.06);}
+.agenda-chip.ok{border-left-color:var(--green);color:var(--t2);background:var(--green-bg);}
 .agenda-day-more{font-size:9px;color:var(--t4);font-family:'Geist Mono',monospace;}
 .agenda-empty{font-size:11px;color:var(--t4);padding:4px 0;}
 /* Full agenda view */
@@ -880,15 +882,22 @@ function renderAgendaStrip() {
   let html = '';
   // Eerst verlopen items
   const overdue = cards.filter(c => new Date(c.due) < today);
-  function chipHtml(c, cls) {
-    return '<div class="agenda-chip ' + cls + '" data-action="agendaclick" data-proj="' + c.projId + '" data-phase="' + (c.phase||'intentie') + '" data-card="' + c.id + '" style="cursor:pointer;" title="' + esc(c.projName) + ' → ' + esc(c.phaseName) + '">' + esc(c.title||'').substring(0,18) + '</div>';
+  function chipUrgency(c) {
+    const diff = (new Date(c.due) - today) / (1000*60*60*24);
+    if (diff < 0) return 'overdue';
+    if (diff < 1) return 'urgent';
+    if (diff < 3) return 'soon';
+    return 'ok';
+  }
+  function chipHtml(c) {
+    return '<div class="agenda-chip ' + chipUrgency(c) + '" data-action="agendaclick" data-proj="' + c.projId + '" data-phase="' + (c.phase||'intentie') + '" data-card="' + c.id + '" style="cursor:pointer;" title="' + esc(c.projName) + ' → ' + esc(c.phaseName) + '">' + esc(c.title||'').substring(0,18) + '</div>';
   }
 
   if (overdue.length) {
     html += '<div class="agenda-day" style="border-color:var(--red);border-width:1.5px;">' +
       '<div class="agenda-day-label" style="color:var(--red);cursor:pointer;" onclick="toggleAgendaView()">VERLOPEN</div>' +
       '<div class="agenda-day-items">' +
-      overdue.slice(0,3).map(c => chipHtml(c, 'overdue')).join('') +
+      overdue.slice(0,3).map(c => chipHtml(c)).join('') +
       (overdue.length > 3 ? '<div class="agenda-day-more" style="cursor:pointer;" onclick="toggleAgendaView()">+' + (overdue.length-3) + ' meer</div>' : '') +
       '</div></div>';
   }
@@ -904,7 +913,7 @@ function renderAgendaStrip() {
       '<div class="agenda-day-label" style="cursor:pointer;" onclick="toggleAgendaView()">' + label + '</div>' +
       '<div class="agenda-day-items">' +
       (dayCards.length ? dayCards.slice(0,3).map(c =>
-        chipHtml(c, i === 0 ? 'urgent' : '')
+        chipHtml(c)
       ).join('') + (dayCards.length > 3 ? '<div class="agenda-day-more" style="cursor:pointer;" onclick="toggleAgendaView()">+' + (dayCards.length-3) + ' meer</div>' : '')
       : '<div class="agenda-empty">—</div>') +
       '</div></div>';
