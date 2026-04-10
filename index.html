@@ -667,7 +667,12 @@ function scheduleRetry() {
     const remaining = [];
     for (const op of q) {
       try { await apiCall(op.method, op.path, op.body); }
-      catch(e) { remaining.push(op); }
+      catch(e) {
+        // 404 = resource bestaat niet op server, niet opnieuw proberen
+        // 401 = auth fout, niet opnieuw proberen
+        if (e.message && (e.message.includes('404') || e.message.includes('401'))) continue;
+        remaining.push(op);
+      }
     }
     setPending(remaining);
     if (remaining.length) { retryTimer = setTimeout(scheduleRetry, 15000); }
