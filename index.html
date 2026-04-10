@@ -141,8 +141,26 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 .col-count{margin-left:auto;font-size:10px;font-family:'Geist Mono',monospace;color:var(--t4);background:var(--s3);padding:1px 5px;border-radius:7px;}
 .col-desc{font-size:10px;color:var(--t4);line-height:1.4;}
 .col-actions{padding:5px 9px;flex-shrink:0;border-bottom:1px solid var(--b1);}
-.col-ask{width:100%;padding:5px 8px;border-radius:var(--rs);background:var(--cb);border:1px solid var(--cc);opacity:.6;font-family:'Geist',sans-serif;font-size:11px;font-weight:500;color:var(--cc);cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;}
+.col-ask{flex:1;padding:5px 8px;border-radius:var(--rs);background:var(--cb);border:1px solid var(--cc);opacity:.6;font-family:'Geist',sans-serif;font-size:11px;font-weight:500;color:var(--cc);cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;}
 .col-ask:hover{opacity:1;}
+.col-add-btn{padding:5px 8px;border-radius:var(--rs);background:var(--s2);border:1px solid var(--b1);font-family:'Geist',sans-serif;font-size:11px;font-weight:600;color:var(--t2);cursor:pointer;transition:all .12s;white-space:nowrap;}
+.col-add-btn:hover{background:var(--s3);color:var(--t1);border-color:var(--b2);}
+.col-actions{padding:5px 9px;flex-shrink:0;border-bottom:1px solid var(--b1);display:flex;gap:4px;}
+.add-menu{position:absolute;top:100%;left:0;right:0;background:var(--s1);border:1px solid var(--b2);border-radius:var(--rs);box-shadow:0 8px 24px rgba(0,0,0,.15);z-index:50;display:none;overflow:hidden;}
+.add-menu.open{display:block;}
+.add-menu-item{padding:8px 11px;font-size:12px;cursor:pointer;display:flex;align-items:center;gap:7px;border-bottom:1px solid var(--b1);transition:background .1s;}
+.add-menu-item:last-child{border-bottom:none;}
+.add-menu-item:hover{background:var(--s3);}
+.add-menu-item .ami-ico{font-size:14px;width:20px;text-align:center;}
+.add-menu-item .ami-label{font-weight:500;}
+.add-menu-item .ami-desc{font-size:10px;color:var(--t3);margin-left:auto;}
+.add-inline{display:none;padding:7px;border-bottom:1px solid var(--b1);background:var(--s2);}
+.add-inline.open{display:block;}
+.add-inline input,.add-inline textarea{width:100%;padding:7px 9px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--rs);color:var(--t1);font-family:'Geist',sans-serif;font-size:12px;outline:none;margin-bottom:5px;}
+.add-inline input:focus,.add-inline textarea:focus{border-color:var(--cc);}
+.add-inline textarea{min-height:50px;resize:vertical;}
+.add-inline-btns{display:flex;gap:4px;justify-content:flex-end;}
+.add-inline-type{font-size:10px;font-family:'Geist Mono',monospace;color:var(--cc);font-weight:600;letter-spacing:.05em;margin-bottom:5px;}
 .col-cards{flex:1;overflow-y:auto;padding:7px;display:flex;flex-direction:column;gap:6px;}
 .empty-hint{padding:14px 8px;text-align:center;color:var(--t4);font-size:11px;line-height:1.6;}
 .col-footer{padding:7px;flex-shrink:0;border-top:1px solid var(--b1);}
@@ -744,8 +762,25 @@ function renderBoard(p) {
       '<div class="col-desc">' + esc(ph.desc) + '</div>' +
       '</div>' +
       '<div class="col-actions">' +
-      '<button class="col-ask" data-action="openchat" data-proj="' + p.id + '" data-phase="' + ph.id + '">⬡ Vraag Claude over ' + ph.label.toLowerCase() + '</button>' +
+      '<button class="col-ask" data-action="openchat" data-proj="' + p.id + '" data-phase="' + ph.id + '">⬡ Claude</button>' +
+      '<button class="col-add-btn" data-action="toggleadd" data-phase="' + ph.id + '">+ Toevoegen</button>' +
       '</div>' +
+      '<div class="add-inline" id="addinline-' + ph.id + '">' +
+      '<div class="add-inline-type" id="addtype-' + ph.id + '">📝 NOTITIE</div>' +
+      '<div style="display:flex;gap:3px;margin-bottom:5px;">' +
+      '<button class="btn btn-ghost" style="padding:3px 6px;font-size:11px" data-action="setaddtype" data-phase="' + ph.id + '" data-type="note">📝</button>' +
+      '<button class="btn btn-ghost" style="padding:3px 6px;font-size:11px" data-action="setaddtype" data-phase="' + ph.id + '" data-type="link">🔗</button>' +
+      '<button class="btn btn-ghost" style="padding:3px 6px;font-size:11px" data-action="setaddtype" data-phase="' + ph.id + '" data-type="video">🎬</button>' +
+      '<button class="btn btn-ghost" style="padding:3px 6px;font-size:11px" data-action="setaddtype" data-phase="' + ph.id + '" data-type="article">📄</button>' +
+      '<button class="btn btn-ghost" style="padding:3px 6px;font-size:11px" data-action="setaddtype" data-phase="' + ph.id + '" data-type="image">🖼</button>' +
+      '</div>' +
+      '<input id="addtitle-' + ph.id + '" placeholder="Titel..." data-phase="' + ph.id + '">' +
+      '<input id="addurl-' + ph.id + '" placeholder="URL (optioneel)" data-phase="' + ph.id + '" style="display:none;">' +
+      '<textarea id="addcontent-' + ph.id + '" placeholder="Notitie..." data-phase="' + ph.id + '" style="display:none;"></textarea>' +
+      '<div class="add-inline-btns">' +
+      '<button class="btn btn-ghost" style="font-size:11px;padding:4px 10px" data-action="canceladd" data-phase="' + ph.id + '">Annuleer</button>' +
+      '<button class="btn btn-primary" style="font-size:11px;padding:4px 10px" data-action="submitadd" data-phase="' + ph.id + '">Toevoegen</button>' +
+      '</div></div>' +
       '<div class="col-cards" id="cards-' + ph.id + '">' +
       (filtered.length === 0 ? '<div class="empty-hint">Nog geen activiteiten<br>in ' + ph.label + '</div>' : '') +
       filtered.map(c => cardHTML(c, ph.id)).join('') +
@@ -773,7 +808,7 @@ function passFilter(c) {
 }
 
 function cardHTML(c, phaseId) {
-  const typeIcos = {note:'📝', link:'🔗', image:'🖼'};
+  const typeIcos = {note:'📝', link:'🔗', image:'🖼', video:'🎬', article:'📄'};
   const prioLabels = {high:'🔴 HOOG', mid:'🟡 MID', low:'🟢 LAAG'};
   const prioHtml = c.priority ? '<div class="prio-badge prio-' + c.priority + '">' + prioLabels[c.priority] + '</div>' : '';
 
@@ -808,19 +843,104 @@ function truncUrl(u) {
   catch(e) { return u.substring(0, 38); }
 }
 
-// ── QUICK ADD ──
+// ── ADD CONTENT ──
+const ADD_TYPES = {
+  note:    {ico:'📝', label:'NOTITIE',    showUrl:false, showContent:true,  urlPlaceholder:''},
+  link:    {ico:'🔗', label:'LINK',       showUrl:true,  showContent:false, urlPlaceholder:'https://...'},
+  video:   {ico:'🎬', label:'VIDEO',      showUrl:true,  showContent:false, urlPlaceholder:'YouTube / Vimeo URL...'},
+  article: {ico:'📄', label:'ARTIKEL',    showUrl:true,  showContent:true,  urlPlaceholder:'URL naar artikel...'},
+  image:   {ico:'🖼', label:'AFBEELDING', showUrl:true,  showContent:false, urlPlaceholder:'URL naar afbeelding...'},
+};
+let addTypeState = {}; // per phase: welk type is geselecteerd
+
+function toggleAddInline(phaseId) {
+  const el = document.getElementById('addinline-' + phaseId);
+  const isOpen = el.classList.contains('open');
+  // Sluit alle andere
+  document.querySelectorAll('.add-inline').forEach(x => x.classList.remove('open'));
+  if (!isOpen) {
+    el.classList.add('open');
+    if (!addTypeState[phaseId]) setAddType(phaseId, 'note');
+    document.getElementById('addtitle-' + phaseId).focus();
+  }
+}
+
+function setAddType(phaseId, type) {
+  addTypeState[phaseId] = type;
+  const cfg = ADD_TYPES[type];
+  document.getElementById('addtype-' + phaseId).textContent = cfg.ico + ' ' + cfg.label;
+  const urlEl = document.getElementById('addurl-' + phaseId);
+  const contentEl = document.getElementById('addcontent-' + phaseId);
+  urlEl.style.display = cfg.showUrl ? 'block' : 'none';
+  urlEl.placeholder = cfg.urlPlaceholder;
+  contentEl.style.display = cfg.showContent ? 'block' : 'none';
+  // Highlight geselecteerde type-knop
+  document.querySelectorAll('[data-action="setaddtype"][data-phase="' + phaseId + '"]').forEach(btn => {
+    btn.style.background = btn.dataset.type === type ? 'var(--s4)' : '';
+    btn.style.borderColor = btn.dataset.type === type ? 'var(--b3)' : '';
+  });
+}
+
+function cancelAdd(phaseId) {
+  document.getElementById('addinline-' + phaseId).classList.remove('open');
+  document.getElementById('addtitle-' + phaseId).value = '';
+  document.getElementById('addurl-' + phaseId).value = '';
+  document.getElementById('addcontent-' + phaseId).value = '';
+}
+
+function submitAdd(phaseId) {
+  const p = getProj(curProjId);
+  if (!p) return;
+  const type = addTypeState[phaseId] || 'note';
+  const title = document.getElementById('addtitle-' + phaseId).value.trim();
+  const url = document.getElementById('addurl-' + phaseId).value.trim();
+  const content = document.getElementById('addcontent-' + phaseId).value.trim();
+  if (!title && !url && !content) { toast('Vul minimaal een titel of URL in'); return; }
+
+  const card = {
+    id: uid(), phase: phaseId, type: (type === 'video' || type === 'article') ? 'link' : type,
+    title: title || (url ? truncUrl(url) : 'Naamloos'),
+    content: content, url: url, priority: '',
+    tags: type === 'video' ? ['video'] : type === 'article' ? ['artikel'] : [],
+    checklist: [], createdAt: new Date().toISOString()
+  };
+
+  if (!p.phases[phaseId]) p.phases[phaseId] = [];
+  p.phases[phaseId].push(card);
+  save();
+  syncUpsertCard(p.id, card);
+  cancelAdd(phaseId);
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast(ADD_TYPES[type].ico + ' ' + ADD_TYPES[type].label.toLowerCase() + ' toegevoegd');
+}
+
+// Smart quick-add: detecteert URLs automatisch
 function quickAdd(phaseId, value) {
   if (!value.trim()) return;
   const p = getProj(curProjId);
   if (!p) return;
-  const card = {id:uid(), phase:phaseId, type:'note', title:value.trim(), content:'', tags:[], checklist:[], createdAt:new Date().toISOString()};
+  const v = value.trim();
+  const isUrl = /^https?:\/\//i.test(v) || /^www\./i.test(v);
+  const isVideo = isUrl && /youtube|youtu\.be|vimeo|dailymotion/i.test(v);
+
+  const card = {
+    id: uid(), phase: phaseId,
+    type: isUrl ? 'link' : 'note',
+    title: isUrl ? truncUrl(v) : v,
+    content: '',
+    url: isUrl ? (v.startsWith('www.') ? 'https://' + v : v) : '',
+    tags: isVideo ? ['video'] : [],
+    checklist: [], createdAt: new Date().toISOString()
+  };
+
   if (!p.phases[phaseId]) p.phases[phaseId] = [];
   p.phases[phaseId].push(card);
   save();
   syncUpsertCard(p.id, card);
   renderBoard(p);
   renderPhaseOv(p);
-  toast('Kaart toegevoegd');
+  toast(isUrl ? '🔗 Link toegevoegd' : '📝 Kaart toegevoegd');
 }
 
 // ── DRAG & DROP ──
@@ -885,7 +1005,7 @@ function openDetail(cardId, phaseId) {
     imgData: card.imageData || null
   };
   const ph = PHASES.find(x => x.id === phaseId);
-  const typeIcos = {note:'📝', link:'🔗', image:'🖼'};
+  const typeIcos = {note:'📝', link:'🔗', image:'🖼', video:'🎬', article:'📄'};
   document.getElementById('dpTypeIco').textContent = typeIcos[card.type] || '📝';
   document.getElementById('dpTitle').value = card.title || '';
   document.getElementById('dpPrio').value = card.priority || '';
@@ -1231,6 +1351,10 @@ document.addEventListener('click', function(e) {
   if (action === 'opendetail') { e.stopPropagation(); openDetail(el.dataset.card, el.dataset.phase); return; }
   if (action === 'deletecard') { e.stopPropagation(); deleteCard(el.dataset.card, el.dataset.phase); return; }
   if (action === 'openchat') { openChatPanel(el.dataset.proj, el.dataset.phase); return; }
+  if (action === 'toggleadd') { e.stopPropagation(); toggleAddInline(el.dataset.phase); return; }
+  if (action === 'setaddtype') { e.stopPropagation(); setAddType(el.dataset.phase, el.dataset.type); return; }
+  if (action === 'canceladd') { e.stopPropagation(); cancelAdd(el.dataset.phase); return; }
+  if (action === 'submitadd') { e.stopPropagation(); submitAdd(el.dataset.phase); return; }
   if (action === 'searchclick') {
     document.getElementById('searchResults').classList.remove('open');
     document.getElementById('searchInput').value = '';
