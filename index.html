@@ -624,20 +624,22 @@ function load() { try { const d = localStorage.getItem(STORE); if (d) projects =
 // ── SYNC LAYER ──
 // Offline-first: mutaties gaan eerst naar localStorage + UI, daarna naar backend.
 // Bij falen wordt de op in een retry-queue gezet die overleeft page reloads.
-// Sync via CKPS — probeer ckps.hafworld.com, fallback naar localhost:3800
-// (ckps.hafworld.com is vanuit sommige omgevingen niet bereikbaar)
-let SYNC_BASE = 'https://ckps.hafworld.com';
+// Sync via CKPS — detecteer automatisch welke CKPS-endpoint bereikbaar is
+let SYNC_BASE = 'http://localhost:3800'; // default: lokaal (werkt altijd op W365)
+let syncBaseResolved = false;
 (async function detectSyncBase() {
-  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') { SYNC_BASE = 'http://localhost:3800'; return; }
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') { syncBaseResolved = true; return; }
+  // Probeer localhost eerst (snelst, werkt op W365 waar CKPS draait)
   try {
-    const r = await fetch('https://ckps.hafworld.com/health', {signal: AbortSignal.timeout(3000)});
-    if (r.ok) return; // ckps.hafworld.com werkt
+    const r = await fetch('http://localhost:3800/health', {signal: AbortSignal.timeout(2000)});
+    if (r.ok) { SYNC_BASE = 'http://localhost:3800'; syncBaseResolved = true; console.log('CKPS: localhost:3800'); return; }
   } catch(e) {}
-  // Fallback: probeer localhost:3800 (werkt als app op W365 draait)
+  // Fallback: ckps.hafworld.com (voor Pixel en andere externe devices)
   try {
-    const r2 = await fetch('http://localhost:3800/health', {signal: AbortSignal.timeout(2000)});
-    if (r2.ok) { SYNC_BASE = 'http://localhost:3800'; console.log('SYNC_BASE fallback: localhost:3800'); }
-  } catch(e) {}
+    const r2 = await fetch('https://ckps.hafworld.com/health', {signal: AbortSignal.timeout(3000)});
+    if (r2.ok) { SYNC_BASE = 'https://ckps.hafworld.com'; console.log('CKPS: ckps.hafworld.com'); }
+  } catch(e) { console.warn('CKPS niet bereikbaar'); }
+  syncBaseResolved = true;
 })();
 const PENDING_KEY = 'haf_proj_pending';
 const LAST_SYNC_KEY = 'haf_proj_last_sync';
