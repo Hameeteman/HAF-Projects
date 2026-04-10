@@ -374,7 +374,10 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
       <div>
         <div class="dp-sec">Inhoud</div>
         <textarea class="dp-ta" id="dpContent" placeholder="Notities, observaties, beslissingen..."></textarea>
-        <div id="dpUrlWrap" style="display:none;margin-top:6px"><input class="dp-url" id="dpUrl" placeholder="https://..."></div>
+        <div id="dpUrlWrap" style="margin-top:6px;gap:4px;align-items:center;display:none;">
+          <input class="dp-url" id="dpUrl" placeholder="https://..." style="flex:1;">
+          <a id="dpUrlOpen" href="#" target="_blank" class="btn btn-ghost" style="padding:5px 8px;font-size:11px;text-decoration:none;white-space:nowrap;">↗ Open</a>
+        </div>
         <div id="dpImgWrap" style="display:none;margin-top:8px">
           <img id="dpImgPreview" style="width:100%;max-height:170px;object-fit:cover;border-radius:var(--rs);display:none;margin-bottom:6px;">
           <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--t2);">
@@ -1071,6 +1074,8 @@ function openDetail(cardId, phaseId) {
   document.getElementById('dpType').value = card.type || 'note';
   document.getElementById('dpContent').value = card.content || '';
   document.getElementById('dpUrl').value = card.url || '';
+  document.getElementById('dpUrlOpen').href = card.url || '#';
+  document.getElementById('dpUrlOpen').style.display = card.url ? 'inline-flex' : 'none';
   document.getElementById('dpPhaseTag').textContent = ph ? ph.label : '';
   if (ph) { document.getElementById('dpPhaseTag').style.background = ph.bg; document.getElementById('dpPhaseTag').style.color = ph.color; }
   const moveEl = document.getElementById('dpMovePhase');
@@ -1084,7 +1089,7 @@ function openDetail(cardId, phaseId) {
 }
 
 function updateTypeFields(type) {
-  document.getElementById('dpUrlWrap').style.display = type === 'link' ? 'block' : 'none';
+  document.getElementById('dpUrlWrap').style.display = type === 'link' ? 'flex' : 'none';
   document.getElementById('dpImgWrap').style.display = type === 'image' ? 'block' : 'none';
 }
 
@@ -1442,6 +1447,13 @@ document.getElementById('dpChecklist').addEventListener('click', function(e) {
 
 // Type change
 document.getElementById('dpType').addEventListener('change', function() { updateTypeFields(this.value); });
+
+// URL veld: sync Open-knop href bij typen
+document.getElementById('dpUrl').addEventListener('input', function() {
+  const btn = document.getElementById('dpUrlOpen');
+  btn.href = this.value || '#';
+  btn.style.display = this.value.trim() ? 'inline-flex' : 'none';
+});
 
 // Tag add
 document.getElementById('dpTagInput').addEventListener('keydown', function(e) {
