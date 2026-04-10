@@ -130,3 +130,27 @@ Totaal: ~4 uur
 - End-to-end encryptie — token-based auth is voldoende voor nu
 - Realtime collab — geen websockets, gewoon polling-based sync
 - Notificaties — geen push, geen reminders (nog)
+
+---
+
+## Feature backlog — nog uit te voeren
+
+Geïnspireerd door de beste features van Trello, Asana en ClickUp,
+gefilterd op wat past bij de HAF Projects architectuur.
+
+### ✅ Gebouwd (10 apr 2026)
+- [x] **PWA share-target** — app verschijnt in Android "Delen" menu, kies project + fase, URL/titel automatisch ingevuld (ClickUp-inspiratie)
+- [x] **Due date kleur-badges** — rood/oranje/groen accent-balk bovenaan kaarten met deadline (Trello-inspiratie)
+- [x] **Checklist progress-bar** — visuele voortgangsbalk op kaart wanneer checklist items bestaan (Asana-inspiratie)
+
+### 🔲 Nog te bouwen
+
+**Prioriteit 1 — UX verbetering (volgende sessie)**
+- [ ] **Swipe-acties op mobiel** — swipe rechts = prioriteit cyclus, swipe links = verplaats naar volgende fase. Desktop: rechtermuisklik-contextmenu met snelacties (prioriteit, fase, archiveer). Bron: Trello. Geschatte bouwwerk: 2 uur.
+- [ ] **Checklist inline uitklappen** — klik op progress-bar → checklist klapt uit op de kaart zelf, zonder detail-modal. Sub-taken direct afvinken. Bron: Asana. Geschatte bouwwerk: 30 min.
+
+**Prioriteit 2 — Organisatie (later)**
+- [ ] **Sectie-headers / groepering binnen kolommen** — kaarten automatisch groeperen per prioriteit (Hoog/Mid/Laag) of per tag, met inklapbare sectie-headers. Vooral nuttig in OBSERVEREN en PLANNEN. Bron: Asana. Geschatte bouwwerk: 1.5 uur.
+
+**Prioriteit 3 — Strategisch inzicht (later)**
+- [ ] **Tijdlijn-view per project** — horizontale balk per fase met kaarten geplot op aanmaakdatum/deadline. In één oogopslag: "waar staat dit project in de tijd?" Zie je of je te lang in OBSERVEREN hangt. Bron: ClickUp. Geschatte bouwwerk: 3 uur.
