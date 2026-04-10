@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Passkey registreren — HAF Projects</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#f7f7fb;color:#14141f;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px;}
+.box{background:#fff;border:1px solid #e4e4ee;border-radius:14px;padding:32px;max-width:360px;width:100%;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.06);}
+h1{font-size:18px;margin:0 0 6px;}
+p{font-size:13px;color:#7878a0;line-height:1.5;margin:0 0 20px;}
+.btn{display:block;width:100%;padding:12px;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+.btn-primary{background:#14141f;color:#f7f7fb;margin-bottom:10px;}
+.btn-primary:hover{background:#2a2a3a;}
+.btn-back{background:transparent;color:#7878a0;border:1px solid #e4e4ee;}
+#msg{margin-top:16px;font-size:12px;min-height:18px;color:#7878a0;}
+.warn{background:#fff3cd;border:1px solid #f59e0b;border-radius:8px;padding:10px;font-size:11px;color:#92400e;margin-bottom:18px;line-height:1.5;}
+</style>
+</head>
+<body>
+<div class="box">
+  <div style="font-size:28px;margin-bottom:10px;">🔑</div>
+  <h1>Passkey registreren</h1>
+  <p>Registreer een nieuwe passkey op dit domein voor HAF Projects. Doe dit op je <strong>telefoon</strong>, niet op W365.</p>
+  <div class="warn">⚠ Gebruik deze pagina NIET op Windows 365 — dat crasht Windows Hello.</div>
+  <button class="btn btn-primary" id="btnReg">Registreer passkey</button>
+  <button class="btn btn-back" onclick="location.href='./'">Terug naar HAF Projects</button>
+  <div id="msg"></div>
+</div>
+<script>
+const BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? 'http://localhost:3800' : 'https://ckps.hafworld.com';
+const EMAIL = 'roland@hameeteman.com';
+
+function b64urlToBuf(s) {
+  s = s.replace(/-/g,'+').replace(/_/g,'/'); while (s.length % 4) s += '=';
+  const b = atob(s); const u = new Uint8Array(b.length);
+  for (let i=0;i<b.length;i++) u[i] = b.charCodeAt(i); return u.buffer;
+}
+function bufToB64url(buf) {
+  const b = new Uint8Array(buf); let s = '';
+  for (let i=0;i<b.length;i++) s += String.fromCharCode(b[i]);
+  return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+
+document.getElementById('btnReg').addEventListener('click', async () => {
+  const msg = document.getElementById('msg');
+  msg.textContent = 'Bezig...';
+  try {
+    const r1 = await fetch(BASE + '/auth/passkey/register-begin', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: EMAIL, displayName: 'Roland Hameeteman' })
+    });
+    if (!r1.ok) { const e = await r1.json().catch(()=>({})); throw new Error(e.error || 'HTTP ' + r1.status); }
+    const opts = await r1.json();
+
+    const cred = await navigator.credentials.create({
+      publicKey: {
+        challenge: b64urlToBuf(opts.challenge),
+        rp: opts.rp,
+        user: { ...opts.user, id: b64urlToBuf(opts.user.id) },
+        pubKeyCredParams: opts.pubKeyCredParams,
+        timeout: opts.timeout || 60000,
+        attestation: opts.attestation || 'none',
+        authenticatorSelection: opts.authenticatorSelection,
+        excludeCredentials: (opts.excludeCredentials||[]).map(c => ({ ...c, id: b64urlToBuf(c.id) })),
+      }
+    });
+    if (!cred) throw new Error('Geannuleerd');
+
+    const payload = {
+      id: cred.id, rawId: bufToB64url(cred.rawId), type: cred.type,
+      response: {
+        clientDataJSON: bufToB64url(cred.response.clientDataJSON),
+        attestationObject: bufToB64url(cred.response.attestationObject),
+      },
+      clientExtensionResults: cred.getClientExtensionResults(),
+    };
+    const r2 = await fetch(BASE + '/auth/passkey/register-finish', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email: EMAIL, credential: payload })
+    });
+    const d = await r2.json();
+    if (!r2.ok) throw new Error(d.error || 'HTTP ' + r2.status);
+
+    msg.style.color = '#10b981';
+    msg.textContent = '✓ Passkey geregistreerd! Ga terug naar HAF Projects en klik "Activeren".';
+  } catch(e) {
+    msg.style.color = '#ef4444';
+    msg.textContent = '⚠ ' + (e.message || 'Mislukt');
+  }
+});
+</script>
+</body>
+</html>

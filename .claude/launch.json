@@ -5,7 +5,7 @@
       "name": "haf-projects",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["--yes", "http-server", "--silent"],
-      "port": 8080,
+      "port": 8091,
       "autoPort": true
     }
   ]

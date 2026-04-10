@@ -286,6 +286,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
     <div class="dash-title">Projecten</div>
     <div class="dash-count" id="dashCount"></div>
     <div class="dash-toolbar">
+      <button class="fb" id="btnShowArchived" style="font-size:10px;padding:3px 8px;margin-right:6px;" data-active="false">📦 Archief</button>
       <div class="view-toggle">
         <div class="vt active" id="vtGrid" data-view="grid">▦ Grid</div>
         <div class="vt" id="vtList" data-view="list">≡ Lijst</div>
@@ -430,6 +431,10 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
     </div>
     <div class="form-group"><div class="form-label">Kleur</div><div class="color-row" id="colorRow"></div></div>
     <div class="form-group"><div class="form-label">Claude Project URL <span style="color:var(--t4)">(optioneel)</span></div><input class="form-input" id="pClaudeUrl" placeholder="https://claude.ai/project/..."></div>
+    <div id="projActions" style="display:none;margin-top:8px;padding-top:12px;border-top:1px solid var(--b1);display:flex;gap:6px;">
+      <button class="btn btn-ghost" id="btnArchiveProj" style="flex:1;justify-content:center;">📦 Archiveren</button>
+      <button class="btn btn-danger" id="btnDeleteProj" style="flex:1;justify-content:center;">🗑 Verwijderen</button>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" id="btnCancelProj">Annuleer</button>
       <button class="btn btn-primary" id="btnSaveProj">Opslaan</button>
@@ -619,6 +624,8 @@ function md(t) {
 }
 
 // ── DASHBOARD ──
+let showArchived = false;
+
 function showDash() {
   document.getElementById('viewDash').classList.add('active');
   document.getElementById('viewBoard').classList.remove('active');
@@ -630,19 +637,25 @@ function showDash() {
 function renderDash() {
   const cnt = document.getElementById('projContainer');
   const lbl = document.getElementById('dashCount');
-  lbl.textContent = projects.length + ' project' + (projects.length !== 1 ? 'en' : '');
+  const visible = projects.filter(p => showArchived || p.status !== 'done');
+  const archivedCount = projects.filter(p => p.status === 'done').length;
+  lbl.textContent = visible.length + ' project' + (visible.length !== 1 ? 'en' : '') + (archivedCount > 0 && !showArchived ? ' · ' + archivedCount + ' gearchiveerd' : '');
   document.getElementById('vtGrid').classList.toggle('active', dashView === 'grid');
   document.getElementById('vtList').classList.toggle('active', dashView === 'list');
 
+  const archBtn = document.getElementById('btnShowArchived');
+  archBtn.classList.toggle('active', showArchived);
+  archBtn.textContent = showArchived ? '📦 Archief verbergen' : '📦 Archief' + (archivedCount > 0 ? ' (' + archivedCount + ')' : '');
+
   if (dashView === 'grid') {
     let h = '<div class="proj-grid">';
-    projects.forEach(p => { h += projCardHTML(p); });
+    visible.forEach(p => { h += projCardHTML(p); });
     h += '<div class="new-card" data-action="newproject"><span style="font-size:22px">+</span><span style="font-size:13px;font-weight:500">Nieuw project</span></div>';
     h += '</div>';
     cnt.innerHTML = h;
   } else {
     let h = '<div class="proj-list">';
-    projects.forEach(p => { h += projListRowHTML(p); });
+    visible.forEach(p => { h += projListRowHTML(p); });
     h += '<div class="new-list-row" data-action="newproject"><span>+</span><span>Nieuw project</span></div>';
     h += '</div>';
     cnt.innerHTML = h;
@@ -960,6 +973,32 @@ function deleteCard(cardId, phaseId) {
 }
 
 // ── PROJECT CRUD ──
+function archiveProject() {
+  if (!editProjId) return;
+  const p = getProj(editProjId);
+  if (!p) return;
+  const wasArchived = p.status === 'done';
+  p.status = wasArchived ? 'active' : 'done';
+  save();
+  syncUpsertProject(p);
+  closeModal('modalProj');
+  showDash();
+  toast(wasArchived ? 'Project geactiveerd' : 'Project gearchiveerd');
+}
+
+function deleteProject() {
+  if (!editProjId) return;
+  const p = getProj(editProjId);
+  if (!p) return;
+  if (!confirm('Weet je zeker dat je "' + p.name + '" wilt verwijderen?\n\nAlle kaarten worden ook verwijderd. Dit is niet ongedaan te maken.')) return;
+  projects = projects.filter(pr => pr.id !== editProjId);
+  save();
+  syncDeleteProject(editProjId);
+  closeModal('modalProj');
+  showDash();
+  toast('Project verwijderd');
+}
+
 function openNewProject() {
   editProjId = null;
   document.getElementById('mProjTitle').textContent = 'Nieuw project';
@@ -967,6 +1006,7 @@ function openNewProject() {
   document.getElementById('pDesc').value = '';
   document.getElementById('pStatus').value = 'active';
   document.getElementById('pClaudeUrl').value = '';
+  document.getElementById('projActions').style.display = 'none';
   renderEmojiRow(EMOJIS[0]);
   renderColorRow(COLORS[0]);
   openModal('modalProj');
@@ -981,6 +1021,8 @@ function editCurrentProject() {
   document.getElementById('pDesc').value = p.desc || '';
   document.getElementById('pStatus').value = p.status || 'active';
   document.getElementById('pClaudeUrl').value = p.claudeUrl || '';
+  document.getElementById('projActions').style.display = 'flex';
+  document.getElementById('btnArchiveProj').textContent = p.status === 'done' ? '📦 Activeren' : '📦 Archiveren';
   renderEmojiRow(p.icon || EMOJIS[0]);
   renderColorRow(p.color || COLORS[0]);
   openModal('modalProj');
@@ -1288,6 +1330,9 @@ document.getElementById('btnDelCard').addEventListener('click', () => deleteCard
 document.getElementById('btnCloseChat').addEventListener('click', closeChatPanel);
 document.getElementById('btnSaveProj').addEventListener('click', saveProject);
 document.getElementById('btnCancelProj').addEventListener('click', () => closeModal('modalProj'));
+document.getElementById('btnArchiveProj').addEventListener('click', archiveProject);
+document.getElementById('btnDeleteProj').addEventListener('click', deleteProject);
+document.getElementById('btnShowArchived').addEventListener('click', () => { showArchived = !showArchived; renderDash(); });
 
 // Chat
 document.getElementById('chatSend').addEventListener('click', sendMsg);
