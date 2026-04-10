@@ -169,8 +169,13 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 .quick-input::placeholder{color:var(--t4);}
 
 /* CARDS */
-.card{background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);padding:9px 10px;cursor:pointer;transition:all .15s;position:relative;}
+.card{background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);padding:9px 10px;cursor:pointer;transition:all .15s;position:relative;overflow:hidden;}
 .card:hover{border-color:var(--b2);background:var(--s3);}
+.card-due-bar{position:absolute;top:0;left:0;right:0;height:3px;}
+.card-due-bar.due-overdue{background:#ef4444;}
+.card-due-bar.due-urgent{background:#f59e0b;}
+.card-due-bar.due-soon{background:#f59e0b;opacity:.5;}
+.card-due-bar.due-ok{background:#10b981;opacity:.4;}
 .card.dragging{opacity:.35;transform:rotate(1.5deg);}
 .card-type-row{display:flex;align-items:center;gap:4px;margin-bottom:5px;}
 .card-type-ico{font-size:11px;}
@@ -396,6 +401,38 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
         <button class="btn btn-ghost" id="btnCancelDetail">Annuleer</button>
         <button class="btn btn-primary" id="btnSaveDetail">Opslaan</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- SHARE TARGET OVERLAY -->
+<div class="modal-ov" id="shareOv">
+  <div class="modal" style="max-width:400px;">
+    <div class="modal-title">📥 Opslaan in HAF Projects</div>
+    <div class="modal-sub" id="sharePreview" style="margin-bottom:14px;font-size:12px;color:var(--t2);line-height:1.5;word-break:break-word;"></div>
+    <div class="form-group">
+      <div class="form-label">Project *</div>
+      <select class="form-select" id="shareProject"></select>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Fase</div>
+      <select class="form-select" id="sharePhase"></select>
+    </div>
+    <div class="form-group">
+      <div class="form-label">Titel</div>
+      <input class="form-input" id="shareTitle" placeholder="Titel...">
+    </div>
+    <div class="form-group" id="shareUrlGroup">
+      <div class="form-label">URL</div>
+      <input class="form-input" id="shareUrl" placeholder="https://...">
+    </div>
+    <div class="form-group">
+      <div class="form-label">Notitie <span style="color:var(--t4)">(optioneel)</span></div>
+      <textarea class="form-ta" id="shareNote" rows="2" placeholder="Extra context..."></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btnShareCancel">Annuleer</button>
+      <button class="btn btn-primary" id="btnShareSave">Opslaan</button>
     </div>
   </div>
 </div>
@@ -821,11 +858,32 @@ function cardHTML(c, phaseId) {
   const dueHtml = c.due ? dueTagHTML(c.due) : '';
   const clHtml = (c.checklist && c.checklist.length) ? '<div class="cl-badge">' + c.checklist.filter(x=>x.done).length + '/' + c.checklist.length + ' ✓</div>' : '';
 
+  // Due date urgentie-balk
+  let dueBar = '';
+  if (c.due) {
+    const diff = (new Date(c.due) - new Date()) / (1000*60*60*24);
+    if (diff < 0) dueBar = '<div class="card-due-bar due-overdue"></div>';
+    else if (diff <= 1) dueBar = '<div class="card-due-bar due-urgent"></div>';
+    else if (diff <= 3) dueBar = '<div class="card-due-bar due-soon"></div>';
+    else dueBar = '<div class="card-due-bar due-ok"></div>';
+  }
+
+  // Checklist progress bar
+  let clBar = '';
+  if (c.checklist && c.checklist.length) {
+    const done = c.checklist.filter(x => x.done).length;
+    const pct = Math.round(done / c.checklist.length * 100);
+    clBar = '<div style="background:var(--b1);border-radius:2px;height:3px;margin-top:5px;overflow:hidden;">' +
+      '<div style="background:var(--green);height:100%;width:' + pct + '%;border-radius:2px;transition:width .2s;"></div></div>';
+  }
+
   return '<div class="card" id="card-' + c.id + '" draggable="true" data-action="opendetail" data-card="' + c.id + '" data-phase="' + phaseId + '">' +
+    dueBar +
     '<div class="card-type-row"><span class="card-type-ico">' + (typeIcos[c.type]||'📝') + '</span>' + prioHtml + '</div>' +
     (c.title ? '<div class="card-title">' + esc(c.title) + '</div>' : '') +
     preview + tagsHtml +
     '<div class="card-bottom"><span class="card-date">' + fmtDate(c.createdAt) + '</span>' + dueHtml + clHtml + '</div>' +
+    clBar +
     '<button class="card-del" data-action="deletecard" data-card="' + c.id + '" data-phase="' + phaseId + '">✕</button>' +
     '</div>';
 }
@@ -1601,6 +1659,100 @@ if (!hasValidToken()) {
   fullPull();
   scheduleRetry();
 }
+
+// ── SHARE TARGET HANDLER ──
+// Wanneer de app opent via Android Share → HAF Projects verschijnt als optie
+// URL params: ?title=...&url=...&text=...
+function handleShareTarget() {
+  const params = new URLSearchParams(location.search);
+  const sharedTitle = params.get('title') || '';
+  const sharedUrl = params.get('url') || '';
+  const sharedText = params.get('text') || '';
+
+  // Check of er share-params zijn (niet alleen ?v=2 cache-bust)
+  if (!sharedTitle && !sharedUrl && !sharedText) return;
+
+  // Extraheer URL uit text als url param leeg is (sommige apps sturen URL in text)
+  let url = sharedUrl;
+  let text = sharedText;
+  if (!url && text) {
+    const urlMatch = text.match(/https?:\/\/\S+/);
+    if (urlMatch) { url = urlMatch[0]; text = text.replace(url, '').trim(); }
+  }
+
+  // Vul share-overlay
+  const preview = [];
+  if (sharedTitle) preview.push('<strong>' + esc(sharedTitle) + '</strong>');
+  if (url) preview.push('🔗 ' + esc(url.substring(0, 60)) + (url.length > 60 ? '...' : ''));
+  if (text) preview.push(esc(text.substring(0, 100)));
+  document.getElementById('sharePreview').innerHTML = preview.join('<br>') || 'Gedeelde content';
+
+  // Vul project-dropdown
+  const projSel = document.getElementById('shareProject');
+  projSel.innerHTML = projects.filter(p => p.status !== 'done').map(p =>
+    '<option value="' + p.id + '">' + (p.icon||'📋') + ' ' + esc(p.name) + '</option>'
+  ).join('');
+
+  // Vul fase-dropdown
+  const phaseSel = document.getElementById('sharePhase');
+  phaseSel.innerHTML = PHASES.map(ph =>
+    '<option value="' + ph.id + '">' + ph.label + '</option>'
+  ).join('');
+  phaseSel.value = 'observeren'; // default: je observeert iets
+
+  document.getElementById('shareTitle').value = sharedTitle || (url ? truncUrl(url) : text.substring(0, 60));
+  document.getElementById('shareUrl').value = url;
+  document.getElementById('shareUrlGroup').style.display = url ? 'block' : 'none';
+  document.getElementById('shareNote').value = text && text !== sharedTitle ? text : '';
+
+  // Verwijder share-params uit URL (voorkom herhaalde trigger bij refresh)
+  const cleanUrl = location.pathname + location.hash;
+  history.replaceState(null, '', cleanUrl);
+
+  document.getElementById('shareOv').classList.add('open');
+}
+
+function saveShare() {
+  const projId = document.getElementById('shareProject').value;
+  const phaseId = document.getElementById('sharePhase').value;
+  const title = document.getElementById('shareTitle').value.trim();
+  const url = document.getElementById('shareUrl').value.trim();
+  const note = document.getElementById('shareNote').value.trim();
+  if (!projId) { toast('Kies een project'); return; }
+  if (!title && !url) { toast('Vul minimaal een titel of URL in'); return; }
+
+  const p = getProj(projId);
+  if (!p) return;
+  const isUrl = !!url;
+  const isVideo = isUrl && /youtube|youtu\.be|vimeo/i.test(url);
+
+  const card = {
+    id: uid(), phase: phaseId, type: isUrl ? 'link' : 'note',
+    title: title || truncUrl(url),
+    content: note, url: url, priority: '',
+    tags: isVideo ? ['video'] : (isUrl ? ['gedeeld'] : ['gedeeld']),
+    checklist: [], createdAt: new Date().toISOString()
+  };
+
+  if (!p.phases[phaseId]) p.phases[phaseId] = [];
+  p.phases[phaseId].push(card);
+  save();
+  syncUpsertCard(p.id, card);
+
+  document.getElementById('shareOv').classList.remove('open');
+  toast('📥 Opgeslagen in ' + p.name + ' → ' + phaseId.toUpperCase());
+
+  // Open het project
+  openProject(p.id);
+}
+
+document.getElementById('btnShareSave').addEventListener('click', saveShare);
+document.getElementById('btnShareCancel').addEventListener('click', () => {
+  document.getElementById('shareOv').classList.remove('open');
+});
+
+// Trigger share handler na init
+handleShareTarget();
 
 // Service worker registratie (PWA)
 if ('serviceWorker' in navigator) {
