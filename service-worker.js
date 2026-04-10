@@ -3,7 +3,7 @@
 // - Statics (HTML/CSS/JS/icons): stale-while-revalidate
 // - API calls (ckps.hafworld.com/projects/*): network-only — sync logica in app handelt offline af
 // - Chat proxy (ckps.hafworld.com/v1/messages): network-only — live Claude calls nooit cachen
-const CACHE = 'haf-projects-v1';
+const CACHE = 'haf-projects-v2';
 const CORE = [
   './',
   './index.html',

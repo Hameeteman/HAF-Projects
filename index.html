@@ -1951,10 +1951,12 @@ function importSelected_tasks() {
   toast('📥 ' + count + ' ' + (count === 1 ? 'taak' : 'taken') + ' geïmporteerd');
 }
 
-document.getElementById('btnImport').addEventListener('click', openImportOverlay);
-document.getElementById('btnGoogleConnect').addEventListener('click', connectGoogle);
-document.getElementById('btnMsConnect').addEventListener('click', connectMicrosoft);
-document.getElementById('btnImportSelected').addEventListener('click', importSelected_tasks);
+try {
+  document.getElementById('btnImport').addEventListener('click', openImportOverlay);
+  document.getElementById('btnGoogleConnect').addEventListener('click', connectGoogle);
+  document.getElementById('btnMsConnect').addEventListener('click', connectMicrosoft);
+  document.getElementById('btnImportSelected').addEventListener('click', importSelected_tasks);
+} catch(e) { console.warn('Import listeners:', e.message); }
 
 if (!hasValidToken()) {
   showBootstrap('Klik om dit apparaat te koppelen met je passkey.');
