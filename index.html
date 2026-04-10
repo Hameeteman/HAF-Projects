@@ -880,12 +880,16 @@ function renderAgendaStrip() {
   let html = '';
   // Eerst verlopen items
   const overdue = cards.filter(c => new Date(c.due) < today);
+  function chipHtml(c, cls) {
+    return '<div class="agenda-chip ' + cls + '" data-action="agendaclick" data-proj="' + c.projId + '" data-phase="' + (c.phase||'intentie') + '" data-card="' + c.id + '" style="cursor:pointer;" title="' + esc(c.projName) + ' → ' + esc(c.phaseName) + '">' + esc(c.title||'').substring(0,18) + '</div>';
+  }
+
   if (overdue.length) {
-    html += '<div class="agenda-day" onclick="toggleAgendaView()" style="border-color:var(--red);border-width:1.5px;">' +
-      '<div class="agenda-day-label" style="color:var(--red)">VERLOPEN</div>' +
+    html += '<div class="agenda-day" style="border-color:var(--red);border-width:1.5px;">' +
+      '<div class="agenda-day-label" style="color:var(--red);cursor:pointer;" onclick="toggleAgendaView()">VERLOPEN</div>' +
       '<div class="agenda-day-items">' +
-      overdue.slice(0,3).map(c => '<div class="agenda-chip overdue">' + esc(c.title||'').substring(0,18) + '</div>').join('') +
-      (overdue.length > 3 ? '<div class="agenda-day-more">+' + (overdue.length-3) + ' meer</div>' : '') +
+      overdue.slice(0,3).map(c => chipHtml(c, 'overdue')).join('') +
+      (overdue.length > 3 ? '<div class="agenda-day-more" style="cursor:pointer;" onclick="toggleAgendaView()">+' + (overdue.length-3) + ' meer</div>' : '') +
       '</div></div>';
   }
 
@@ -894,14 +898,14 @@ function renderAgendaStrip() {
     const d = new Date(today); d.setDate(d.getDate() + i);
     const ds = d.toISOString().substring(0, 10);
     const dayCards = cards.filter(c => c.due.substring(0, 10) === ds);
-    if (!dayCards.length && i > 2) continue; // lege dagen na 3 dagen overslaan
+    if (!dayCards.length && i > 2) continue;
     const label = i === 0 ? 'VANDAAG' : i === 1 ? 'MORGEN' : dayNames[d.getDay()] + ' ' + d.getDate();
-    html += '<div class="agenda-day' + (i === 0 ? ' today' : '') + '" onclick="toggleAgendaView()">' +
-      '<div class="agenda-day-label">' + label + '</div>' +
+    html += '<div class="agenda-day' + (i === 0 ? ' today' : '') + '">' +
+      '<div class="agenda-day-label" style="cursor:pointer;" onclick="toggleAgendaView()">' + label + '</div>' +
       '<div class="agenda-day-items">' +
       (dayCards.length ? dayCards.slice(0,3).map(c =>
-        '<div class="agenda-chip' + (i === 0 ? ' urgent' : '') + '">' + esc(c.title||'').substring(0,18) + '</div>'
-      ).join('') + (dayCards.length > 3 ? '<div class="agenda-day-more">+' + (dayCards.length-3) + ' meer</div>' : '')
+        chipHtml(c, i === 0 ? 'urgent' : '')
+      ).join('') + (dayCards.length > 3 ? '<div class="agenda-day-more" style="cursor:pointer;" onclick="toggleAgendaView()">+' + (dayCards.length-3) + ' meer</div>' : '')
       : '<div class="agenda-empty">—</div>') +
       '</div></div>';
   }
@@ -973,7 +977,11 @@ function showDash() {
   document.getElementById('viewDash').classList.add('active');
   document.getElementById('viewBoard').classList.remove('active');
   document.getElementById('breadcrumb').innerHTML = '';
+  curProjId = null;
   closeChatPanel();
+  // Herstel agenda-view als we daarvandaan kwamen
+  const lastView = localStorage.getItem('haf_last_dashview');
+  if (lastView) { dashView = lastView; localStorage.removeItem('haf_last_dashview'); }
   renderDash();
 }
 
@@ -1834,6 +1842,8 @@ document.addEventListener('click', function(e) {
   if (action === 'openchat') { openChatPanel(el.dataset.proj, el.dataset.phase); return; }
   if (action === 'openimport') { e.stopPropagation(); openImportOverlay(); return; }
   if (action === 'agendaclick') {
+    // Onthoud dat we vanuit agenda kwamen, zodat terug naar dashboard de agenda toont
+    if (dashView === 'agenda') localStorage.setItem('haf_last_dashview', 'agenda');
     openProject(el.dataset.proj);
     setTimeout(() => openDetail(el.dataset.card, el.dataset.phase), 150);
     return;
@@ -2158,9 +2168,10 @@ let googleAccessToken = null;
 let msAccessToken = null;
 let importSelected = new Set();
 
-// Expose import functies op window (nodig voor onclick in dynamische HTML)
+// Expose functies op window (nodig voor onclick in dynamische HTML)
 window.switchImportTab = switchImportTab;
 window.toggleImportItem = toggleImportItem;
+window.toggleAgendaView = toggleAgendaView;
 
 function switchImportTab(tab) {
   document.querySelectorAll('.import-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
