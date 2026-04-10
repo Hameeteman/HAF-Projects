@@ -926,55 +926,83 @@ function renderBoard(p) {
   setupDragDrop();
 }
 
-// Groepeer kaarten per type — alleen als het overzichtelijker is (3+ kaarten, 2+ typen)
+// Groepeer kaarten per type — drempel afhankelijk van schermhoogte
+function effectiveType(c) {
+  const t = c.type || 'note';
+  if (c.tags) {
+    if (c.tags.includes('google-tasks') || c.tags.includes('ms-todo')) return 'task';
+    if (c.tags.includes('video')) return 'video';
+    if (c.tags.includes('artikel')) return 'article';
+  }
+  return t;
+}
+
+function getCardCapacity() {
+  // Schat hoeveel kaarten in de zichtbare kolomhoogte passen
+  // Kolom = viewport - topbar(52) - phaseOv(30) - filterBar(36) - colHead(55) - colFooter(40) - margins(40)
+  const available = window.innerHeight - 253;
+  const cardHeight = 85; // gemiddelde kaarthoogte in px
+  return Math.max(2, Math.floor(available / cardHeight));
+}
+
 function renderGroupedCards(cards, phaseId) {
   if (!cards.length) return '';
   const typeOrder = ['task','note','link','article','video','image'];
   const typeLabels = {task:'Taken', note:'Notities', link:'Links', article:'Artikelen', video:'Video', image:'Afbeeldingen'};
   const typeIcos = {task:'☑', note:'📝', link:'🔗', article:'📄', video:'🎬', image:'🖼'};
 
-  // Bepaal effectief type (tags bepalen subtype)
-  function effectiveType(c) {
-    const t = c.type || 'note';
-    if (c.tags) {
-      if (c.tags.includes('google-tasks') || c.tags.includes('ms-todo')) return 'task';
-      if (c.tags.includes('video')) return 'video';
-      if (c.tags.includes('artikel')) return 'article';
-    }
-    return t;
-  }
-
-  // Tel unieke typen
   const types = new Set(cards.map(c => effectiveType(c)));
+  const capacity = getCardCapacity();
 
-  // Groepeer alleen als: 4+ kaarten EN 2+ typen
-  if (cards.length < 4 || types.size < 2) {
+  // Geen groepering als: weinig typen of alles past op scherm
+  if (types.size < 2 || cards.length <= capacity) {
     return cards.map(c => cardHTML(c, phaseId)).join('');
   }
 
-  // Groepeer per effectief type
-  let html = '';
+  // Groepeer per type, bepaal welke groepen ingeklapt starten
+  const groups = [];
   typeOrder.forEach(type => {
     const group = cards.filter(c => effectiveType(c) === type);
-    if (!group.length) return;
-    // Video/article tags check (ze worden als 'link' type opgeslagen met tag)
+    if (group.length) groups.push({ type, group });
+  });
+  // Onbekende types
+  const known = new Set(typeOrder);
+  const other = cards.filter(c => !known.has(effectiveType(c)));
+  if (other.length) groups.push({ type: 'other', group: other });
+
+  // Sorteer groepen op grootte (grootste eerst) — grootste groep blijft open
+  const sorted = [...groups].sort((a, b) => b.group.length - a.group.length);
+  const largestType = sorted[0]?.type;
+
+  // Bereken hoeveel groepen open kunnen blijven
+  let openCards = 0;
+  const openGroups = new Set();
+  for (const g of sorted) {
+    if (openCards + g.group.length <= capacity) {
+      openGroups.add(g.type);
+      openCards += g.group.length;
+    } else if (openGroups.size === 0) {
+      // Minstens de grootste groep altijd open
+      openGroups.add(g.type);
+      openCards += g.group.length;
+    }
+  }
+
+  let html = '';
+  groups.forEach(({ type, group }) => {
+    const collapsed = !openGroups.has(type);
+    const ico = typeIcos[type] || '📝';
+    const label = typeLabels[type] || type;
     html += '<div class="type-group">' +
-      '<div class="type-group-header" onclick="this.classList.toggle(\'collapsed\')">' +
+      '<div class="type-group-header' + (collapsed ? ' collapsed' : '') + '" onclick="this.classList.toggle(\'collapsed\')">' +
       '<span class="tg-arrow">▼</span>' +
-      '<span>' + (typeIcos[type]||'📝') + ' ' + (typeLabels[type]||type) + '</span>' +
+      '<span>' + ico + ' ' + label + '</span>' +
       '<span style="margin-left:auto;font-family:Geist Mono,monospace;font-size:9px;color:var(--t4)">' + group.length + '</span>' +
       '</div>' +
       '<div class="type-group-cards">' +
       group.map(c => cardHTML(c, phaseId)).join('') +
       '</div></div>';
   });
-
-  // Vang kaarten met onbekend type
-  const known = new Set(typeOrder);
-  const other = cards.filter(c => !known.has(effectiveType(c)));
-  if (other.length) {
-    html += other.map(c => cardHTML(c, phaseId)).join('');
-  }
 
   return html;
 }
