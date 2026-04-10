@@ -587,9 +587,8 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 // ── CONSTANTS ──
 // CKPS-token wordt via passkey-bootstrap binnengehaald (Optie C).
 // Bij eerste start: passkey-flow → token → localStorage. Daarna automatisch.
-const CKPS_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-  ? 'http://localhost:3800' : 'https://ckps.hafworld.com';
-const CKPS = CKPS_BASE + '/v1/messages';
+// Alle CKPS endpoints lezen dynamisch SYNC_BASE (kan async wijzigen via detectSyncBase)
+function ckpsUrl(path) { return SYNC_BASE + path; }
 let CKPS_KEY = localStorage.getItem('haf_ckps_token') || 'CKPS_KEY_PLACEHOLDER';
 const MODEL = 'claude-opus-4-6';
 const STORE = 'haf_proj_v2';
@@ -625,8 +624,21 @@ function load() { try { const d = localStorage.getItem(STORE); if (d) projects =
 // ── SYNC LAYER ──
 // Offline-first: mutaties gaan eerst naar localStorage + UI, daarna naar backend.
 // Bij falen wordt de op in een retry-queue gezet die overleeft page reloads.
-const SYNC_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
-  ? 'http://localhost:3800' : 'https://ckps.hafworld.com';
+// Sync via CKPS — probeer ckps.hafworld.com, fallback naar localhost:3800
+// (ckps.hafworld.com is vanuit sommige omgevingen niet bereikbaar)
+let SYNC_BASE = 'https://ckps.hafworld.com';
+(async function detectSyncBase() {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') { SYNC_BASE = 'http://localhost:3800'; return; }
+  try {
+    const r = await fetch('https://ckps.hafworld.com/health', {signal: AbortSignal.timeout(3000)});
+    if (r.ok) return; // ckps.hafworld.com werkt
+  } catch(e) {}
+  // Fallback: probeer localhost:3800 (werkt als app op W365 draait)
+  try {
+    const r2 = await fetch('http://localhost:3800/health', {signal: AbortSignal.timeout(2000)});
+    if (r2.ok) { SYNC_BASE = 'http://localhost:3800'; console.log('SYNC_BASE fallback: localhost:3800'); }
+  } catch(e) {}
+})();
 const PENDING_KEY = 'haf_proj_pending';
 const LAST_SYNC_KEY = 'haf_proj_last_sync';
 let retryTimer = null;
@@ -1494,7 +1506,7 @@ async function sendMsg() {
   document.getElementById('chatSend').disabled = true;
   const el = addBotMsg('…', true);
   try {
-    const resp = await fetch(CKPS, {
+    const resp = await fetch(ckpsUrl('/v1/messages'), {
       method: 'POST',
       headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+CKPS_KEY, 'anthropic-version':'2023-06-01'},
       body: JSON.stringify({model:MODEL, max_tokens:1024, system:buildSysPrompt(), messages:chatHistory.slice(-12)})
@@ -1748,7 +1760,7 @@ async function runBootstrap() {
   msg.textContent = 'Bezig...';
   try {
     // 1. Vraag challenge bij CKPS
-    const r1 = await fetch(CKPS_BASE + '/auth/passkey/login-begin', { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
+    const r1 = await fetch(ckpsUrl('/auth/passkey/login-begin'), { method:'POST', headers:{'Content-Type':'application/json'}, body:'{}' });
     if (!r1.ok) throw new Error('login-begin: HTTP ' + r1.status);
     const opts = await r1.json();
 
@@ -1777,7 +1789,7 @@ async function runBootstrap() {
       },
       clientExtensionResults: cred.getClientExtensionResults(),
     };
-    const r3 = await fetch(CKPS_BASE + '/apps/haf-projects/bootstrap', {
+    const r3 = await fetch(ckpsUrl('/apps/haf-projects/bootstrap'), {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ challengeId: opts.challengeId, credential: credPayload })
     });
