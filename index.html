@@ -346,7 +346,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
     <button class="btn btn-ghost" id="btnBackDash">← Dashboard</button>
     <div class="board-title" id="boardTitle"></div>
     <div class="board-actions">
-      <button class="btn btn-ghost" id="btnImport">📥 Importeer</button>
+      <button class="btn btn-ghost" id="btnImport" data-action="openimport">📥 Importeer</button>
       <button class="btn btn-ghost" id="btnBoardClaude">⬡ Claude</button>
       <button class="btn btn-ghost" id="btnEditProj">⚙ Instellingen</button>
     </div>
@@ -1485,6 +1485,7 @@ document.addEventListener('click', function(e) {
   if (action === 'opendetail') { e.stopPropagation(); openDetail(el.dataset.card, el.dataset.phase); return; }
   if (action === 'deletecard') { e.stopPropagation(); deleteCard(el.dataset.card, el.dataset.phase); return; }
   if (action === 'openchat') { openChatPanel(el.dataset.proj, el.dataset.phase); return; }
+  if (action === 'openimport') { e.stopPropagation(); openImportOverlay(); return; }
   if (action === 'toggleadd') { e.stopPropagation(); toggleAddInline(el.dataset.phase); return; }
   if (action === 'setaddtype') { e.stopPropagation(); setAddType(el.dataset.phase, el.dataset.type); return; }
   if (action === 'canceladd') { e.stopPropagation(); cancelAdd(el.dataset.phase); return; }
