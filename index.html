@@ -1737,6 +1737,59 @@ async function runBootstrap() {
 
 document.getElementById('btnBootstrap').addEventListener('click', runBootstrap);
 
+// ── CLIPBOARD PASTE — plak plaatjes direct als kaart ──
+document.addEventListener('paste', function(e) {
+  if (!curProjId) return; // alleen op board-view
+  // Niet onderscheppen als gebruiker in een input/textarea typt
+  const tag = (e.target.tagName || '').toLowerCase();
+  if (tag === 'input' || tag === 'textarea') return;
+
+  const items = e.clipboardData?.items;
+  if (!items) return;
+
+  for (let i = 0; i < items.length; i++) {
+    if (items[i].type.startsWith('image/')) {
+      e.preventDefault();
+      const file = items[i].getAsFile();
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(ev) {
+        const imgData = ev.target.result;
+        // Als detail-modal open → voeg toe aan huidige kaart
+        if (document.getElementById('detailOv').classList.contains('open') && detailState.cardId) {
+          detailState.imgData = imgData;
+          const el = document.getElementById('dpImgPreview');
+          el.src = imgData; el.style.display = 'block';
+          document.getElementById('dpType').value = 'image';
+          updateTypeFields('image');
+          toast('🖼 Plaatje geplakt in kaart');
+          return;
+        }
+        // Anders: maak nieuwe kaart in OBSERVEREN (of eerste fase met content)
+        const p = getProj(curProjId);
+        if (!p) return;
+        const phaseId = 'observeren';
+        const card = {
+          id: uid(), phase: phaseId, type: 'image',
+          title: 'Geplakt plaatje · ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'}),
+          content: '', url: '', imageData: imgData,
+          priority: '', tags: ['clipboard'], checklist: [],
+          createdAt: new Date().toISOString()
+        };
+        if (!p.phases[phaseId]) p.phases[phaseId] = [];
+        p.phases[phaseId].push(card);
+        save();
+        syncUpsertCard(p.id, card);
+        renderBoard(p);
+        renderPhaseOv(p);
+        toast('🖼 Plaatje geplakt in OBSERVEREN');
+      };
+      reader.readAsDataURL(file);
+      return; // verwerk alleen eerste image
+    }
+  }
+});
+
 // ── IMPORT — Google Tasks + Microsoft To Do ──
 // Client IDs: vul deze in na OAuth app registratie
 const GOOGLE_CLIENT_ID = '164489935785-nnhmn3s7qt4qgemapedkeg79gaaj3ap6.apps.googleusercontent.com';
