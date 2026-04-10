@@ -723,14 +723,51 @@ async function fullPull() {
     const byId = {}; projects.forEach(p => byId[p.id] = p);
     (d.projects||[]).forEach(sp => {
       const local = byId[sp.id];
-      if (!local || new Date(sp.updatedAt||0) >= new Date(local.updatedAt||0)) {
-        const merged = { ...(local||{}), ...sp, phases: {} };
+      if (!local) {
+        // Nieuw project van server — maak phases aan
+        const merged = { ...sp, phases: {} };
         PHASES.forEach(ph => merged.phases[ph.id] = []);
         (sp.cards||[]).forEach(c => {
-          c.due = c.dueDate; // mapping backend→frontend
+          c.due = c.dueDate;
           if (!merged.phases[c.phase]) merged.phases[c.phase] = [];
           merged.phases[c.phase].push(c);
         });
+        byId[sp.id] = merged;
+      } else {
+        // Bestaand project — merge metadata maar BEHOUD lokale kaarten
+        // Server-kaarten updaten/toevoegen, lokale kaarten die niet op server staan behouden
+        const merged = { ...local, ...sp };
+        merged.phases = local.phases || {};
+        PHASES.forEach(ph => { if (!merged.phases[ph.id]) merged.phases[ph.id] = []; });
+
+        // Bouw index van server-kaarten
+        const serverCardIds = new Set();
+        (sp.cards||[]).forEach(sc => {
+          sc.due = sc.dueDate;
+          serverCardIds.add(sc.id);
+          // Zoek en update lokale kaart, of voeg toe
+          let found = false;
+          PHASES.forEach(ph => {
+            const idx = (merged.phases[ph.id]||[]).findIndex(c => c.id === sc.id);
+            if (idx !== -1) {
+              // Verplaats naar juiste fase als nodig
+              if (ph.id !== sc.phase) {
+                merged.phases[ph.id].splice(idx, 1);
+                if (!merged.phases[sc.phase]) merged.phases[sc.phase] = [];
+                merged.phases[sc.phase].push(sc);
+              } else {
+                merged.phases[ph.id][idx] = sc; // update bestaande
+              }
+              found = true;
+            }
+          });
+          if (!found) {
+            if (!merged.phases[sc.phase]) merged.phases[sc.phase] = [];
+            merged.phases[sc.phase].push(sc);
+          }
+        });
+
+        // Lokale kaarten die niet op server staan: BEHOUDEN (nog niet gesynct)
         byId[sp.id] = merged;
       }
     });
