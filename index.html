@@ -660,8 +660,53 @@ let detailState = {projId:null, phaseId:null, cardId:null, tags:[], checklist:[]
 let dragState = {cardId:null, phaseId:null};
 
 // ── STORAGE ──
-function save() { try { localStorage.setItem(STORE, JSON.stringify(projects)); } catch(e) {} updateSyncBadge(); }
-function load() { try { const d = localStorage.getItem(STORE); if (d) projects = JSON.parse(d); } catch(e) {} }
+function save() {
+  try {
+    localStorage.setItem(STORE, JSON.stringify(projects));
+  } catch(e) {
+    // localStorage vol — waarschijnlijk door base64 afbeeldingen
+    console.warn('localStorage vol:', e.message);
+    // Probeer opnieuw zonder imageData (die wordt apart opgeslagen)
+    try {
+      const light = projects.map(p => {
+        const lp = { ...p, phases: {} };
+        PHASES.forEach(ph => {
+          lp.phases[ph.id] = (p.phases[ph.id]||[]).map(c => {
+            if (c.imageData && c.imageData.length > 50000) {
+              // Sla grote afbeeldingen apart op
+              try { localStorage.setItem('haf_img_' + c.id, c.imageData); } catch(e2) {}
+              return { ...c, imageData: null, imageRef: 'haf_img_' + c.id };
+            }
+            return c;
+          });
+        });
+        return lp;
+      });
+      localStorage.setItem(STORE, JSON.stringify(light));
+    } catch(e2) {
+      toast('⚠ Opslag vol — verwijder enkele afbeeldingen');
+    }
+  }
+  updateSyncBadge();
+}
+function load() {
+  try {
+    const d = localStorage.getItem(STORE);
+    if (d) {
+      projects = JSON.parse(d);
+      // Herstel afbeeldingen die apart zijn opgeslagen
+      projects.forEach(p => {
+        PHASES.forEach(ph => {
+          (p.phases[ph.id]||[]).forEach(c => {
+            if (c.imageRef && !c.imageData) {
+              c.imageData = localStorage.getItem(c.imageRef) || null;
+            }
+          });
+        });
+      });
+    }
+  } catch(e) {}
+}
 
 // ── SYNC LAYER ──
 // Offline-first: mutaties gaan eerst naar localStorage + UI, daarna naar backend.
@@ -1370,14 +1415,15 @@ document.addEventListener('change', function(e) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = function(ev) {
-    addImgData[phaseId] = ev.target.result;
-    const prev = document.getElementById('addimgpreview-' + phaseId);
-    if (prev) { prev.src = ev.target.result; prev.style.display = 'block'; }
-    // Auto-fill titel als leeg
-    const titleEl = document.getElementById('addtitle-' + phaseId);
-    if (titleEl && !titleEl.value.trim()) {
-      titleEl.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
-    }
+    compressImage(ev.target.result, 800, 0.7, compressed => {
+      addImgData[phaseId] = compressed;
+      const prev = document.getElementById('addimgpreview-' + phaseId);
+      if (prev) { prev.src = compressed; prev.style.display = 'block'; }
+      const titleEl = document.getElementById('addtitle-' + phaseId);
+      if (titleEl && !titleEl.value.trim()) {
+        titleEl.value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]/g, ' ');
+      }
+    });
   };
   reader.readAsDataURL(file);
 });
@@ -1917,16 +1963,31 @@ document.getElementById('clNew').addEventListener('keydown', function(e) {
 });
 
 // Image upload
+// Comprimeer afbeelding naar max 800px breed, JPEG 0.7 kwaliteit (~50-100KB ipv meerdere MB)
+function compressImage(dataUrl, maxWidth, quality, callback) {
+  const img = new Image();
+  img.onload = function() {
+    const canvas = document.createElement('canvas');
+    let w = img.width, h = img.height;
+    if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    callback(canvas.toDataURL('image/jpeg', quality || 0.7));
+  };
+  img.src = dataUrl;
+}
+
 function handleDetailImgUpload(fileInput) {
   const f = fileInput.files[0]; if (!f) return;
   const r = new FileReader();
   r.onload = ev => {
-    detailState.imgData = ev.target.result;
-    const el = document.getElementById('dpImgPreview');
-    el.src = detailState.imgData; el.style.display = 'block';
-    // Auto-switch type naar image
-    document.getElementById('dpType').value = 'image';
-    updateTypeFields('image');
+    compressImage(ev.target.result, 800, 0.7, compressed => {
+      detailState.imgData = compressed;
+      const el = document.getElementById('dpImgPreview');
+      el.src = compressed; el.style.display = 'block';
+      document.getElementById('dpType').value = 'image';
+      updateTypeFields('image');
+    });
   };
   r.readAsDataURL(f);
 }
@@ -2132,35 +2193,35 @@ document.addEventListener('paste', function(e) {
       if (!file) return;
       const reader = new FileReader();
       reader.onload = function(ev) {
-        const imgData = ev.target.result;
-        // Als detail-modal open → voeg toe aan huidige kaart
-        if (document.getElementById('detailOv').classList.contains('open') && detailState.cardId) {
-          detailState.imgData = imgData;
-          const el = document.getElementById('dpImgPreview');
-          el.src = imgData; el.style.display = 'block';
-          document.getElementById('dpType').value = 'image';
-          updateTypeFields('image');
-          toast('🖼 Plaatje geplakt in kaart');
-          return;
-        }
-        // Anders: maak nieuwe kaart in OBSERVEREN (of eerste fase met content)
-        const p = getProj(curProjId);
-        if (!p) return;
-        const phaseId = 'observeren';
-        const card = {
-          id: uid(), phase: phaseId, type: 'image',
-          title: 'Geplakt plaatje · ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'}),
-          content: '', url: '', imageData: imgData,
-          priority: '', tags: ['clipboard'], checklist: [],
-          createdAt: new Date().toISOString()
-        };
-        if (!p.phases[phaseId]) p.phases[phaseId] = [];
-        p.phases[phaseId].push(card);
-        save();
-        syncUpsertCard(p.id, card);
-        renderBoard(p);
-        renderPhaseOv(p);
-        toast('🖼 Plaatje geplakt in OBSERVEREN');
+        compressImage(ev.target.result, 800, 0.7, imgData => {
+          // Als detail-modal open → voeg toe aan huidige kaart
+          if (document.getElementById('detailOv').classList.contains('open') && detailState.cardId) {
+            detailState.imgData = imgData;
+            const el = document.getElementById('dpImgPreview');
+            el.src = imgData; el.style.display = 'block';
+            document.getElementById('dpType').value = 'image';
+            updateTypeFields('image');
+            toast('🖼 Plaatje geplakt in kaart');
+            return;
+          }
+          const p = getProj(curProjId);
+          if (!p) return;
+          const phaseId = 'observeren';
+          const card = {
+            id: uid(), phase: phaseId, type: 'image',
+            title: 'Geplakt plaatje · ' + new Date().toLocaleTimeString('nl-NL', {hour:'2-digit',minute:'2-digit'}),
+            content: '', url: '', imageData: imgData,
+            priority: '', tags: ['clipboard'], checklist: [],
+            createdAt: new Date().toISOString()
+          };
+          if (!p.phases[phaseId]) p.phases[phaseId] = [];
+          p.phases[phaseId].push(card);
+          save();
+          syncUpsertCard(p.id, card);
+          renderBoard(p);
+          renderPhaseOv(p);
+          toast('🖼 Plaatje geplakt in OBSERVEREN');
+        });
       };
       reader.readAsDataURL(file);
       return; // verwerk alleen eerste image
