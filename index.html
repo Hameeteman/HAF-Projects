@@ -1565,6 +1565,20 @@ function quickAdd(phaseId, value) {
 
 // ── DRAG & DROP ──
 function setupDragDrop() {
+  // Hover highlight: licht bronketen op bij hover
+  document.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      if (!document.getElementById('detailOv').classList.contains('open')) {
+        highlightChain(el.dataset.card);
+      }
+    });
+    el.addEventListener('mouseleave', () => {
+      if (!document.getElementById('detailOv').classList.contains('open')) {
+        clearChainHighlight();
+      }
+    });
+  });
+
   document.querySelectorAll('.card').forEach(el => {
     el.addEventListener('dragstart', e => {
       dragState.cardId = el.dataset.card;
