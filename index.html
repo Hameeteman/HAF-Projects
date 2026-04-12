@@ -408,6 +408,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
     <button class="fb" data-filter="image">🖼 Afbeeldingen</button>
     <button class="fb" data-filter="high">🔴 Hoog</button>
     <button class="fb" data-filter="due">📅 Binnenkort</button>
+    <button class="fb" data-filter="archived">📦 Archief</button>
   </div>
   <div class="board-body">
     <div class="cols-scroll" id="boardCols"></div>
@@ -482,6 +483,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
       </div>
     </div>
     <div class="dp-footer">
+      <button class="btn btn-ghost" id="btnArchiveCard" style="color:var(--ci);">📦 Archiveer</button>
       <button class="btn btn-danger" id="btnDelCard">🗑 Verwijder</button>
       <div style="display:flex;gap:7px">
         <button class="btn btn-ghost" id="btnCancelDetail">Annuleer</button>
@@ -1344,18 +1346,23 @@ function renderGroupedCards(cards, phaseId) {
   return html;
 }
 
+let showArchivedCards = false;
+
 function passFilter(c) {
-  if (curFilter === 'all') return true;
-  if (curFilter === 'note') return c.type === 'note';
-  if (curFilter === 'link') return c.type === 'link';
-  if (curFilter === 'image') return c.type === 'image';
-  if (curFilter === 'high') return c.priority === 'high';
+  // Gearchiveerde kaarten verbergen tenzij archief-filter aan
+  if (c.archived && !showArchivedCards && curFilter !== 'archived') return false;
+  if (curFilter === 'all') return !c.archived; // 'all' toont geen gearchiveerde
+  if (curFilter === 'archived') return !!c.archived;
+  if (curFilter === 'note') return c.type === 'note' && !c.archived;
+  if (curFilter === 'link') return c.type === 'link' && !c.archived;
+  if (curFilter === 'image') return c.type === 'image' && !c.archived;
+  if (curFilter === 'high') return c.priority === 'high' && !c.archived;
   if (curFilter === 'due') {
-    if (!c.due) return false;
+    if (c.archived || !c.due) return false;
     const diff = (new Date(c.due) - new Date()) / (1000*60*60*24);
     return diff <= 7 && diff >= -1;
   }
-  return true;
+  return !c.archived;
 }
 
 function cardHTML(c, phaseId) {
@@ -1626,6 +1633,11 @@ function openDetail(cardId, phaseId) {
   updateTypeFields(card.type);
   renderDetailTags();
   renderDetailChecklist();
+  // Archiveer-knop dynamisch label
+  const archBtn = document.getElementById('btnArchiveCard');
+  archBtn.textContent = card.archived ? '📦 Herstel' : '📦 Archiveer';
+  archBtn.style.color = card.archived ? 'var(--green)' : 'var(--ci)';
+
   document.getElementById('detailOv').classList.add('open');
   loadAttachments(cardId);
 }
@@ -1684,8 +1696,39 @@ function saveDetail() {
   toast('Kaart opgeslagen');
 }
 
+function archiveCard(cardId, phaseId) {
+  const p = getProj(curProjId);
+  if (!p) return;
+  const cards = p.phases[phaseId] || [];
+  const card = cards.find(c => c.id === cardId);
+  if (!card) return;
+  card.archived = true;
+  card.archivedAt = new Date().toISOString();
+  save();
+  syncUpsertCard(p.id, card);
+  document.getElementById('detailOv').classList.remove('open');
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast('📦 Kaart gearchiveerd');
+}
+
+function unarchiveCard(cardId, phaseId) {
+  const p = getProj(curProjId);
+  if (!p) return;
+  const cards = p.phases[phaseId] || [];
+  const card = cards.find(c => c.id === cardId);
+  if (!card) return;
+  delete card.archived;
+  delete card.archivedAt;
+  save();
+  syncUpsertCard(p.id, card);
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast('Kaart hersteld');
+}
+
 function deleteCard(cardId, phaseId) {
-  if (!confirm('Kaart verwijderen?')) return;
+  if (!confirm('Kaart definitief verwijderen? (niet meer herstelbaar)')) return;
   const p = getProj(curProjId);
   if (!p) return;
   p.phases[phaseId] = (p.phases[phaseId]||[]).filter(c => c.id !== cardId);
@@ -1888,19 +1931,33 @@ async function aiCall(systemPrompt, userPrompt, maxTokens) {
 // Bouw projectcontext voor AI
 function buildProjectContext(p) {
   let ctx = 'Project: "' + p.name + '"\nIntentie: "' + (p.desc||'Niet gedefinieerd') + '"\n\n';
+  let archivedCtx = '';
   PHASES.forEach(ph => {
-    const cards = (p.phases[ph.id]||[]);
-    if (!cards.length) { ctx += ph.label + ': (leeg)\n'; return; }
-    ctx += ph.label + ' (' + cards.length + ' items):\n';
-    cards.forEach(c => {
-      ctx += '  - [' + (c.type||'note') + '] ' + (c.title||'Naamloos');
-      if (c.content) ctx += ': ' + c.content.substring(0, 80);
-      if (c.url) ctx += ' (' + c.url + ')';
-      if (c.due) ctx += ' [deadline: ' + c.due + ']';
-      if (c.tags?.length) ctx += ' #' + c.tags.join(' #');
-      ctx += '\n';
-    });
+    const active = (p.phases[ph.id]||[]).filter(c => !c.archived);
+    const archived = (p.phases[ph.id]||[]).filter(c => c.archived);
+    if (!active.length && !archived.length) { ctx += ph.label + ': (leeg)\n'; return; }
+    if (active.length) {
+      ctx += ph.label + ' (' + active.length + ' actief):\n';
+      active.forEach(c => {
+        ctx += '  - [' + (c.type||'note') + '] ' + (c.title||'Naamloos');
+        if (c.content) ctx += ': ' + c.content.substring(0, 80);
+        if (c.url) ctx += ' (' + c.url + ')';
+        if (c.due) ctx += ' [deadline: ' + c.due + ']';
+        if (c.tags?.length) ctx += ' #' + c.tags.join(' #');
+        ctx += '\n';
+      });
+    }
+    if (archived.length) {
+      archivedCtx += ph.label + ' (' + archived.length + ' gearchiveerd):\n';
+      archived.forEach(c => {
+        archivedCtx += '  - [ARCHIEF] ' + (c.title||'Naamloos');
+        if (c.content) archivedCtx += ': ' + c.content.substring(0, 60);
+        if (c.archivedAt) archivedCtx += ' [gearchiveerd: ' + c.archivedAt.substring(0,10) + ']';
+        archivedCtx += '\n';
+      });
+    }
   });
+  if (archivedCtx) ctx += '\n--- GEARCHIVEERD (beschikbaar als context) ---\n' + archivedCtx;
   return ctx;
 }
 
@@ -2190,6 +2247,14 @@ document.getElementById('btnCloseDetail').addEventListener('click', () => docume
 document.getElementById('btnCancelDetail').addEventListener('click', () => document.getElementById('detailOv').classList.remove('open'));
 document.getElementById('btnSaveDetail').addEventListener('click', saveDetail);
 document.getElementById('btnDelCard').addEventListener('click', () => deleteCard(detailState.cardId, detailState.phaseId));
+document.getElementById('btnArchiveCard').addEventListener('click', () => {
+  const p = getProj(detailState.projId);
+  if (!p) return;
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  if (!card) return;
+  if (card.archived) { unarchiveCard(detailState.cardId, detailState.phaseId); }
+  else { archiveCard(detailState.cardId, detailState.phaseId); }
+});
 document.getElementById('btnCloseChat').addEventListener('click', closeChatPanel);
 document.getElementById('btnSaveProj').addEventListener('click', saveProject);
 document.getElementById('btnCancelProj').addEventListener('click', () => closeModal('modalProj'));
