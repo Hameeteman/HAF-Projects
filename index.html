@@ -810,7 +810,8 @@ async function syncUpsertCard(projectId, card) {
   const body = {
     id:card.id, phase:card.phase, type:card.type, title:card.title,
     content:card.content, url:card.url, priority:card.priority,
-    dueDate:card.due, tags:card.tags||[], position:card.position||0, fromDesc:!!card.fromDesc
+    dueDate:card.due, tags:card.tags||[], position:card.position||0, fromDesc:!!card.fromDesc,
+    linkedCards:card.linkedCards||[], chainId:card.chainId||null, archived:!!card.archived
   };
   try {
     try { await apiCall('PUT', '/projects/' + projectId + '/cards/' + card.id, body); }
@@ -864,7 +865,7 @@ async function fullPull() {
         const merged = { ...sp, phases: {} };
         PHASES.forEach(ph => merged.phases[ph.id] = []);
         (sp.cards||[]).forEach(c => {
-          c.due = c.dueDate;
+          c.due = c.dueDate; if (!c.linkedCards) c.linkedCards = []; c.archived = !!c.archived;
           if (!merged.phases[c.phase]) merged.phases[c.phase] = [];
           merged.phases[c.phase].push(c);
         });
