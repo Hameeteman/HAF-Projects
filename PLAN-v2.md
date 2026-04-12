@@ -154,3 +154,7 @@ gefilterd op wat past bij de HAF Projects architectuur.
 
 **Prioriteit 3 — Strategisch inzicht (later)**
 - [ ] **Tijdlijn-view per project** — horizontale balk per fase met kaarten geplot op aanmaakdatum/deadline. In één oogopslag: "waar staat dit project in de tijd?" Zie je of je te lang in OBSERVEREN hangt. Bron: ClickUp. Geschatte bouwwerk: 3 uur.
+
+**Prioriteit 4 — AI keten-intelligentie (later)**
+- [ ] **AI keten-analyse** — selecteer een kaart met bronkaarten → AI analyseert de hele keten (OBSERVEREN → PLANNEN → ACTEREN) en adviseert: "Wat is er nog nodig om naar de volgende fase te gaan?" Kijkt naar gaps in informatie, ontbrekende acties, risico's. Combineert kaart-content + bijlagen + bronkaarten recursief. Geeft concreet advies per fase. Geschatte bouwwerk: 1.5 uur.
+- [ ] **Microsoft To Do import** — geblokkeerd: Azure App Registration rechten nodig (roland.hameeteman@e-office.com). Code staat klaar, alleen Client ID invullen.

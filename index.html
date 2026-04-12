@@ -487,6 +487,8 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
             <input type="file" id="dpFileUpload" style="display:none;" onchange="uploadFileAttachment(this)">
           </label>
         </div>
+        <button class="btn btn-ghost" id="btnAnalyzeAttachments" style="width:100%;font-size:11px;justify-content:center;margin-top:4px;display:none;" onclick="analyzeAttachments()">🧠 Analyseer bijlagen</button>
+        <div id="dpAttachmentSummary" style="display:none;margin-top:6px;padding:8px 10px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);font-size:12px;line-height:1.5;color:var(--t2);"></div>
       </div>
     </div>
     <div class="dp-footer">
@@ -2505,6 +2507,9 @@ async function loadAttachments(cardId) {
 }
 function renderAttachments(atts) {
   const el = document.getElementById('dpAttachments');
+  const analyzeBtn = document.getElementById('btnAnalyzeAttachments');
+  if (analyzeBtn) analyzeBtn.style.display = atts.length ? '' : 'none';
+  document.getElementById('dpAttachmentSummary').style.display = 'none';
   if (!atts.length) { el.innerHTML = '<div style="font-size:11px;color:var(--t4);">Geen bijlagen</div>'; return; }
   el.innerHTML = atts.map(a => {
     const icon = a.type === 'drive' ? '📁' : '📎';
@@ -2987,6 +2992,64 @@ function resetChain() {
   toast('🔄 Keten gereset naar OBSERVEREN (' + toReset.size + ' kaarten)');
 }
 window.resetChain = resetChain;
+
+async function analyzeAttachments() {
+  const p = getProj(detailState.projId);
+  if (!p) return;
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  if (!card) return;
+
+  const summaryEl = document.getElementById('dpAttachmentSummary');
+  summaryEl.style.display = 'block';
+  summaryEl.innerHTML = '<span style="color:var(--t4);">🧠 Bezig met analyseren...</span>';
+
+  // Verzamel bijlage-info
+  let attInfo = '';
+  try {
+    const d = await apiCall('GET', '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments');
+    const atts = d.attachments || [];
+    if (atts.length) {
+      attInfo = '\n\nBijlagen bij deze kaart:\n';
+      atts.forEach(a => {
+        attInfo += '- ' + (a.type === 'drive' ? '📁 Drive: ' : '📎 Upload: ') + a.name;
+        if (a.drive_url) attInfo += ' (' + a.drive_url + ')';
+        if (a.size > 0) attInfo += ' [' + (a.size > 1048576 ? (a.size/1048576).toFixed(1)+'MB' : Math.round(a.size/1024)+'KB') + ']';
+        attInfo += '\n';
+      });
+    }
+  } catch(e) {}
+
+  // Verzamel bronkaarten-info
+  let chainInfo = '';
+  if (card.linkedCards && card.linkedCards.length) {
+    chainInfo = '\n\nGekoppelde bronkaarten:\n';
+    card.linkedCards.forEach(lc => {
+      const found = getCardFromProject(p, lc.id);
+      if (found) {
+        chainInfo += '- [' + found.phase.label + '] ' + (found.card.title || 'Naamloos');
+        if (found.card.content) chainInfo += ': ' + found.card.content.substring(0, 100);
+        if (found.card.url) chainInfo += ' (' + found.card.url + ')';
+        chainInfo += '\n';
+      }
+    });
+  }
+
+  const sys = 'Je bent een HAF-projectassistent. Analyseer deze kaart met al z\'n bijlagen en bronkaarten.\n\nGeef:\n1. **Samenvatting**: wat is de kern van deze kaart en bijlagen (max 3 zinnen)\n2. **Inzichten**: welke patronen of verbanden zie je in de bijlagen?\n3. **Ontbrekend**: wat zou er nog nodig zijn om een goed besluit te nemen?\n\nAntwoord in het Nederlands. Wees concreet en specifiek op basis van de bestandsnamen en inhoud.';
+
+  const user = 'Kaart: "' + (card.title||'') + '"\nFase: ' + detailState.phaseId.toUpperCase() +
+    '\nInhoud: ' + (card.content || '(leeg)') +
+    (card.url ? '\nURL: ' + card.url : '') +
+    (card.tags?.length ? '\nTags: ' + card.tags.join(', ') : '') +
+    attInfo + chainInfo;
+
+  try {
+    const reply = await aiCall(sys, user, 500);
+    summaryEl.innerHTML = md(reply);
+  } catch(e) {
+    summaryEl.innerHTML = '<span style="color:var(--red);">⚠ AI niet beschikbaar: ' + esc(e.message) + '</span>';
+  }
+}
+window.analyzeAttachments = analyzeAttachments;
 
 window.addDriveAttachment = addDriveAttachment;
 window.uploadFileAttachment = uploadFileAttachment;
