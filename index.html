@@ -792,7 +792,14 @@ async function syncUpsertCard(projectId, card) {
   };
   try {
     try { await apiCall('PUT', '/projects/' + projectId + '/cards/' + card.id, body); }
-    catch(e) { await apiCall('POST', '/projects/' + projectId + '/cards', body); }
+    catch(e) {
+      if (e.message && e.message.includes('404')) {
+        // Project bestaat misschien niet op server — maak eerst aan
+        const p = getProj(projectId);
+        if (p) { await syncUpsertProject(p); }
+      }
+      await apiCall('POST', '/projects/' + projectId + '/cards', body);
+    }
   } catch(e) { enqueue({ method:'POST', path:'/projects/' + projectId + '/cards', body }); }
 }
 async function syncDeleteCard(projectId, cardId) {
@@ -802,6 +809,27 @@ async function syncDeleteCard(projectId, cardId) {
 }
 
 // Full pull — initial load uit server, merge met local (server wint bij conflict)
+// Force-push alle lokale projecten + kaarten naar server (sync recovery)
+async function fullPush() {
+  if (!hasValidToken()) return;
+  toast('⬆ Alle projecten syncen...');
+  let count = 0;
+  for (const p of projects) {
+    try {
+      await syncUpsertProject(p);
+      for (const ph of PHASES) {
+        for (const c of (p.phases[ph.id]||[])) {
+          c.phase = ph.id; // zorg dat phase gezet is
+          try { await syncUpsertCard(p.id, c); count++; } catch(e) {}
+        }
+      }
+    } catch(e) {}
+  }
+  toast('⬆ ' + count + ' kaarten gesynct');
+  updateSyncBadge();
+}
+window.fullPush = fullPush;
+
 async function fullPull() {
   if (!hasValidToken() || !navigator.onLine) { updateSyncBadge(); return; }
   try {
@@ -1219,10 +1247,12 @@ function effectiveType(c) {
 
 function getCardCapacity() {
   // Schat hoeveel kaarten in de zichtbare kolomhoogte passen
-  // Kolom = viewport - topbar(52) - phaseOv(30) - filterBar(36) - colHead(55) - colFooter(40) - margins(40)
   const available = window.innerHeight - 253;
-  const cardHeight = 85; // gemiddelde kaarthoogte in px
-  return Math.max(2, Math.floor(available / cardHeight));
+  const cardHeight = 85;
+  const capacity = Math.max(2, Math.floor(available / cardHeight));
+  // Op mobiel (<768px breed): agressiever groeperen — max 3 kaarten zichtbaar
+  if (window.innerWidth < 768) return Math.min(capacity, 3);
+  return capacity;
 }
 
 function renderGroupedCards(cards, phaseId) {
