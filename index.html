@@ -369,6 +369,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
     <div class="dash-title">Projecten</div>
     <div class="dash-count" id="dashCount"></div>
     <div class="dash-toolbar">
+      <button class="btn btn-ghost" onclick="aiCrossProjectAnalysis()" style="font-size:10px;padding:4px 8px;margin-right:4px;">🧠 Portfolio</button>
       <button class="fb" id="btnShowArchived" style="font-size:10px;padding:3px 8px;margin-right:6px;" data-active="false">📦 Archief</button>
       <div class="view-toggle">
         <div class="vt active" id="vtGrid" data-view="grid">▦ Grid</div>
@@ -393,6 +394,7 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
     <div class="board-title" id="boardTitle"></div>
     <div class="board-actions">
       <button class="btn btn-ghost" id="btnImport" data-action="openimport">📥 Importeer</button>
+      <button class="btn btn-ghost" onclick="aiProjectAnalysis()">🧠 Analyse</button>
       <button class="btn btn-ghost" id="btnBoardClaude">⬡ Claude</button>
       <button class="btn btn-ghost" id="btnEditProj">⚙ Instellingen</button>
     </div>
@@ -1164,7 +1166,8 @@ function renderBoard(p) {
       '<div class="col-desc">' + esc(ph.desc) + '</div>' +
       '</div>' +
       '<div class="col-actions">' +
-      '<button class="col-ask" data-action="openchat" data-proj="' + p.id + '" data-phase="' + ph.id + '">⬡ Claude</button>' +
+      '<button class="col-ask" data-action="openchat" data-proj="' + p.id + '" data-phase="' + ph.id + '" style="flex:2;">⬡ Claude</button>' +
+      (allCards.length >= 2 ? '<button class="col-ask" onclick="aiColumnSummary(\'' + ph.id + '\')" style="flex:1;font-size:10px;">🧠</button>' : '') +
       '<button class="col-add-btn" data-action="toggleadd" data-phase="' + ph.id + '">+ Toevoegen</button>' +
       '</div>' +
       '<div class="add-inline" id="addinline-' + ph.id + '">' +
@@ -1809,6 +1812,103 @@ function buildGreeting(p, ph) {
   if (!ph) return 'Project **' + p.name + '** is actief. ' + (p.desc ? 'Intentie: "' + p.desc + '". ' : '') + 'Wat wil je bespreken?';
   return 'Context: **' + p.name + '** / fase **' + ph.label + '**.\n' + ph.desc + '\n\nWat wil je verkennen?';
 }
+
+// ── AI INTELLIGENCE LAGEN ──
+// Herbruikbare Claude-call via CKPS
+async function aiCall(systemPrompt, userPrompt, maxTokens) {
+  if (!hasValidToken()) throw new Error('Geen CKPS token');
+  const resp = await fetch(ckpsUrl('/v1/messages'), {
+    method: 'POST',
+    headers: {'Content-Type':'application/json', 'Authorization':'Bearer '+CKPS_KEY, 'anthropic-version':'2023-06-01'},
+    body: JSON.stringify({model:MODEL, max_tokens: maxTokens||512, system: systemPrompt, messages:[{role:'user', content: userPrompt}]})
+  });
+  if (!resp.ok) throw new Error('AI: HTTP ' + resp.status);
+  const d = await resp.json();
+  return d.content?.[0]?.text || '';
+}
+
+// Bouw projectcontext voor AI
+function buildProjectContext(p) {
+  let ctx = 'Project: "' + p.name + '"\nIntentie: "' + (p.desc||'Niet gedefinieerd') + '"\n\n';
+  PHASES.forEach(ph => {
+    const cards = (p.phases[ph.id]||[]);
+    if (!cards.length) { ctx += ph.label + ': (leeg)\n'; return; }
+    ctx += ph.label + ' (' + cards.length + ' items):\n';
+    cards.forEach(c => {
+      ctx += '  - [' + (c.type||'note') + '] ' + (c.title||'Naamloos');
+      if (c.content) ctx += ': ' + c.content.substring(0, 80);
+      if (c.url) ctx += ' (' + c.url + ')';
+      if (c.due) ctx += ' [deadline: ' + c.due + ']';
+      if (c.tags?.length) ctx += ' #' + c.tags.join(' #');
+      ctx += '\n';
+    });
+  });
+  return ctx;
+}
+
+// ── LAAG 1: Slim per kolom — samenvatting + suggesties ──
+async function aiColumnSummary(phaseId) {
+  const p = getProj(curProjId); if (!p) return;
+  const ph = PHASES.find(x => x.id === phaseId);
+  const cards = p.phases[phaseId] || [];
+  if (cards.length < 2) { toast('Minimaal 2 items nodig voor samenvatting'); return; }
+
+  toast('🧠 Claude analyseert ' + ph.label + '...');
+  try {
+    const sys = 'Je bent een HAF-projectassistent. Analyseer de items in deze fase en geef:\n1. Een samenvatting van de kern (max 2 zinnen)\n2. Drie concrete vervolgvragen of acties voor de volgende fase\nAntwoord in het Nederlands. Wees direct.';
+    const user = buildProjectContext(p) + '\n\nAnalyseer specifiek de fase ' + ph.label + ' (' + ph.desc + ').\nWat zijn de kernpunten en wat zou de volgende stap moeten zijn?';
+    const reply = await aiCall(sys, user, 400);
+    openChatPanel(curProjId, phaseId);
+    chatHistory = [];
+    chatHistory.push({role:'assistant', content: '🧠 **Analyse ' + ph.label + '**\n\n' + reply});
+    const msgs = document.getElementById('chatMsgs');
+    msgs.innerHTML = '';
+    addBotMsg('🧠 **Analyse ' + ph.label + '**\n\n' + reply);
+  } catch(e) { toast('⚠ AI niet beschikbaar: ' + e.message); }
+}
+
+// ── LAAG 2: Project-niveau analyse ──
+async function aiProjectAnalysis() {
+  const p = getProj(curProjId); if (!p) return;
+  toast('🧠 Claude analyseert project...');
+  try {
+    const sys = 'Je bent een HAF-projectassistent. Analyseer dit project over alle fases heen.\n\nGeef:\n1. **Status**: waar staat het project? Welke fase is het meest actief?\n2. **Bottleneck**: waar stokt het? Is er een fase die te lang gevuld blijft zonder voortgang?\n3. **Advies**: 2-3 concrete vervolgacties om het project vooruit te brengen\n4. **Risico**: is er iets dat aandacht nodig heeft (verlopen deadlines, lege fases, etc.)?\n\nAntwoord in het Nederlands. Gebruik bullets. Wees direct en specifiek.';
+    const user = buildProjectContext(p);
+    const reply = await aiCall(sys, user, 600);
+    openChatPanel(curProjId, null);
+    chatHistory = [];
+    chatHistory.push({role:'assistant', content: '🧠 **Projectanalyse: ' + p.name + '**\n\n' + reply});
+    const msgs = document.getElementById('chatMsgs');
+    msgs.innerHTML = '';
+    addBotMsg('🧠 **Projectanalyse: ' + p.name + '**\n\n' + reply);
+  } catch(e) { toast('⚠ AI niet beschikbaar: ' + e.message); }
+}
+
+// ── LAAG 3: Cross-project intelligence ──
+async function aiCrossProjectAnalysis() {
+  toast('🧠 Claude analyseert alle projecten...');
+  try {
+    const activeProjects = projects.filter(p => p.status !== 'done');
+    let allCtx = 'Totaal ' + activeProjects.length + ' actieve projecten:\n\n';
+    activeProjects.forEach(p => { allCtx += buildProjectContext(p) + '\n---\n'; });
+
+    const sys = 'Je bent een strategisch HAF-projectassistent voor Roland Hameeteman. Analyseer ALLE actieve projecten samen.\n\nGeef:\n1. **Portfolio-overzicht**: welke projecten vorderen goed, welke staan stil?\n2. **Patronen**: zie je terugkerende patronen? (bv. veel projecten in OBSERVEREN maar weinig in ACTEREN)\n3. **Prioriteitsadvies**: als Roland vandaag maar 2 uur heeft, welk project verdient dan aandacht en waarom?\n4. **Verbindingen**: zijn er projecten die elkaar versterken of overlap hebben?\n5. **Weekfocus**: stel een concrete focus voor deze week voor\n\nAntwoord in het Nederlands. Wees direct, strategisch en actionable.';
+    const reply = await aiCall(sys, allCtx, 800);
+
+    // Toon in een modal
+    openChatPanel(null, null);
+    chatHistory = [];
+    chatHistory.push({role:'assistant', content: '🧠 **Portfolio-analyse**\n\n' + reply});
+    const msgs = document.getElementById('chatMsgs');
+    msgs.innerHTML = '';
+    addBotMsg('🧠 **Portfolio-analyse**\n\n' + reply);
+  } catch(e) { toast('⚠ AI niet beschikbaar: ' + e.message); }
+}
+
+// Expose op window voor onclick
+window.aiColumnSummary = aiColumnSummary;
+window.aiProjectAnalysis = aiProjectAnalysis;
+window.aiCrossProjectAnalysis = aiCrossProjectAnalysis;
 
 function buildSysPrompt() {
   const p = getProj(chatProjId);
