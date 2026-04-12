@@ -1264,9 +1264,25 @@ function renderGroupedCards(cards, phaseId) {
   const types = new Set(cards.map(c => effectiveType(c)));
   const capacity = getCardCapacity();
 
-  // Geen groepering als: weinig typen of alles past op scherm
-  if (types.size < 2 || cards.length <= capacity) {
+  // Alles past op scherm → platte lijst
+  if (cards.length <= capacity) {
     return cards.map(c => cardHTML(c, phaseId)).join('');
+  }
+
+  // Meer kaarten dan ruimte maar slechts 1 type → "toon meer" collapse
+  if (types.size < 2) {
+    const visible = cards.slice(0, capacity);
+    const hidden = cards.slice(capacity);
+    let html = visible.map(c => cardHTML(c, phaseId)).join('');
+    if (hidden.length) {
+      html += '<div class="type-group">' +
+        '<div class="type-group-header collapsed" onclick="this.classList.toggle(\'collapsed\')">' +
+        '<span class="tg-arrow">▼</span>' +
+        '<span>+ ' + hidden.length + ' meer</span>' +
+        '</div>' +
+        '<div class="type-group-cards">' + hidden.map(c => cardHTML(c, phaseId)).join('') + '</div></div>';
+    }
+    return html;
   }
 
   // Groepeer per type, bepaal welke groepen ingeklapt starten
