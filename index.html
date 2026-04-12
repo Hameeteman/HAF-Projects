@@ -2518,6 +2518,7 @@ async function addDriveAttachment() {
 
 // Drive picker — zoek en selecteer bestanden
 let drivePath = []; // breadcrumb: [{id, name}]
+let driveSelected = new Map(); // id → {id, name, webViewLink}
 
 function openDrivePicker() {
   let pickerEl = document.getElementById('drivePickerOv');
@@ -2530,6 +2531,10 @@ function openDrivePicker() {
       '<div id="driveBreadcrumb" style="font-size:11px;color:var(--t3);margin-bottom:6px;display:flex;flex-wrap:wrap;gap:2px;"></div>' +
       '<div style="margin-bottom:8px;"><input class="form-input" id="driveSearch" placeholder="🔍 Zoek in Drive..." style="font-size:12px;"></div>' +
       '<div id="driveResults" style="flex:1;overflow-y:auto;min-height:200px;max-height:400px;display:flex;flex-direction:column;gap:3px;"></div>' +
+      '<div id="driveSelectionBar" style="display:none;padding:8px 0 0;border-top:1px solid var(--b1);margin-top:8px;font-size:11px;color:var(--t2);display:flex;align-items:center;gap:8px;">' +
+      '<span id="driveSelCount" style="font-family:Geist Mono,monospace;">0 geselecteerd</span>' +
+      '<button class="btn btn-primary" style="margin-left:auto;font-size:11px;padding:5px 12px;" onclick="addSelectedDriveFiles()">Toevoegen</button>' +
+      '</div>' +
       '<div class="modal-footer"><button class="btn btn-ghost" onclick="closeDrivePicker()">Annuleer</button></div>' +
       '</div>';
     pickerEl.addEventListener('click', e => { if (e.target === pickerEl) closeDrivePicker(); });
@@ -2541,9 +2546,49 @@ function openDrivePicker() {
   }
   pickerEl.classList.add('open');
   document.getElementById('driveSearch').value = '';
+  driveSelected.clear();
+  updateDriveSelectionBar();
   drivePath = [];
   browseDriveFolder('root');
 }
+
+function updateDriveSelectionBar() {
+  const bar = document.getElementById('driveSelectionBar');
+  const count = document.getElementById('driveSelCount');
+  if (!bar || !count) return;
+  bar.style.display = driveSelected.size > 0 ? 'flex' : 'none';
+  count.textContent = driveSelected.size + ' geselecteerd';
+}
+
+function toggleDriveSelect(id, name, webViewLink, el) {
+  if (driveSelected.has(id)) {
+    driveSelected.delete(id);
+    el.style.background = '';
+    el.style.borderColor = 'var(--b1)';
+  } else {
+    driveSelected.set(id, { id, name, webViewLink });
+    el.style.background = 'var(--co-bg)';
+    el.style.borderColor = 'var(--co)';
+  }
+  updateDriveSelectionBar();
+}
+window.toggleDriveSelect = toggleDriveSelect;
+
+async function addSelectedDriveFiles() {
+  if (!driveSelected.size) return;
+  toast('📁 ' + driveSelected.size + ' bestanden toevoegen...');
+  for (const [id, f] of driveSelected) {
+    const driveUrl = f.webViewLink || ('https://drive.google.com/file/d/' + id + '/view');
+    try {
+      await apiCall('POST', '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/drive', { name: f.name, driveUrl });
+    } catch(e) {}
+  }
+  closeDrivePicker();
+  loadAttachments(detailState.cardId);
+  toast('📁 ' + driveSelected.size + ' bestanden toegevoegd');
+  driveSelected.clear();
+}
+window.addSelectedDriveFiles = addSelectedDriveFiles;
 function closeDrivePicker() {
   const el = document.getElementById('drivePickerOv');
   if (el) el.classList.remove('open');
@@ -2624,7 +2669,11 @@ function renderDriveItems(files) {
     const icon = driveIcon(f.mimeType);
     const size = f.size ? (f.size > 1048576 ? (f.size/1048576).toFixed(1)+'MB' : Math.round(f.size/1024)+'KB') : '';
     const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('nl-NL',{day:'2-digit',month:'short'}) : '';
-    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--b1);border-radius:var(--rs);cursor:pointer;transition:background .1s;" onmouseover="this.style.background=\'var(--s3)\'" onmouseout="this.style.background=\'\'" onclick="selectDriveFile(\'' + esc(f.id) + '\',\'' + esc(f.name.replace(/'/g,'')) + '\',\'' + esc(f.webViewLink||'') + '\')">' +
+    const sel = driveSelected.has(f.id);
+    const fname = (f.name||'').replace(/'/g,'').replace(/\\/g,'');
+    const flink = (f.webViewLink||'').replace(/'/g,'');
+    html += '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid ' + (sel?'var(--co)':'var(--b1)') + ';border-radius:var(--rs);cursor:pointer;transition:all .12s;background:' + (sel?'var(--co-bg)':'') + ';" onclick="toggleDriveSelect(\'' + esc(f.id) + '\',\'' + esc(fname) + '\',\'' + esc(flink) + '\',this)">' +
+      '<input type="checkbox" style="flex-shrink:0;" ' + (sel?'checked':'') + '>' +
       '<span style="font-size:18px;">' + icon + '</span>' +
       '<div style="flex:1;min-width:0;">' +
       '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f.name) + '</div>' +
