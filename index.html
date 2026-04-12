@@ -469,6 +469,17 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
         <div class="checklist-items" id="dpChecklist"></div>
         <input class="cl-new" id="clNew" placeholder="+ Subtaak toevoegen (Enter)">
       </div>
+      <div>
+        <div class="dp-sec">Bijlagen</div>
+        <div id="dpAttachments" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;"></div>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-ghost" style="flex:1;font-size:11px;justify-content:center;" onclick="addDriveAttachment()">📁 Google Drive</button>
+          <label class="btn btn-ghost" style="flex:1;font-size:11px;justify-content:center;cursor:pointer;">
+            📎 Upload bestand
+            <input type="file" id="dpFileUpload" style="display:none;" onchange="uploadFileAttachment(this)">
+          </label>
+        </div>
+      </div>
     </div>
     <div class="dp-footer">
       <button class="btn btn-danger" id="btnDelCard">🗑 Verwijder</button>
@@ -1616,6 +1627,7 @@ function openDetail(cardId, phaseId) {
   renderDetailTags();
   renderDetailChecklist();
   document.getElementById('detailOv').classList.add('open');
+  loadAttachments(cardId);
 }
 
 function updateTypeFields(type) {
@@ -2383,6 +2395,71 @@ const MS_CLIENT_ID = 'MS_CLIENT_ID_PLACEHOLDER';         // van Azure App Regist
 let googleAccessToken = null;
 let msAccessToken = null;
 let importSelected = new Set();
+
+// ── BIJLAGEN ──
+async function loadAttachments(cardId) {
+  const el = document.getElementById('dpAttachments'); if (!el) return;
+  if (!hasValidToken()) { el.innerHTML = ''; return; }
+  try {
+    const d = await apiCall('GET', '/projects/' + detailState.projId + '/cards/' + cardId + '/attachments');
+    renderAttachments(d.attachments || []);
+  } catch(e) { el.innerHTML = '<div style="font-size:11px;color:var(--t4);">Geen bijlagen</div>'; }
+}
+function renderAttachments(atts) {
+  const el = document.getElementById('dpAttachments');
+  if (!atts.length) { el.innerHTML = '<div style="font-size:11px;color:var(--t4);">Geen bijlagen</div>'; return; }
+  el.innerHTML = atts.map(a => {
+    const icon = a.type === 'drive' ? '📁' : '📎';
+    const sizeStr = a.size > 0 ? ' · ' + (a.size > 1048576 ? (a.size/1048576).toFixed(1)+'MB' : Math.round(a.size/1024)+'KB') : '';
+    const href = a.type === 'drive' ? a.drive_url : (SYNC_BASE + a.url);
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);font-size:12px;">' +
+      '<span>' + icon + '</span>' +
+      '<a href="' + esc(href) + '" target="_blank" style="flex:1;color:var(--co);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(a.name) + '</a>' +
+      '<span style="font-size:9px;color:var(--t4);font-family:Geist Mono,monospace;">' + (a.type === 'drive' ? 'Drive' : 'Upload') + sizeStr + '</span>' +
+      '<button onclick="deleteAttachment(\'' + a.id + '\')" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:11px;">✕</button>' +
+      '</div>';
+  }).join('');
+}
+async function addDriveAttachment() {
+  const url = prompt('Plak de Google Drive link:');
+  if (!url || !url.trim()) return;
+  const name = prompt('Naam voor dit bestand:', url.split('/').pop() || 'Drive bestand');
+  if (!name) return;
+  try {
+    toast('📁 Drive link opslaan...');
+    await apiCall('POST', '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/drive', { name: name.trim(), driveUrl: url.trim() });
+    loadAttachments(detailState.cardId);
+    toast('📁 Drive bijlage toegevoegd');
+  } catch(e) { toast('⚠ ' + e.message); }
+}
+async function uploadFileAttachment(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 10 * 1024 * 1024) { toast('⚠ Max 10MB per bestand'); return; }
+  toast('📎 Uploaden: ' + file.name + '...');
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    const r = await fetch(SYNC_BASE + '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/upload', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + CKPS_KEY }, body: formData
+    });
+    if (!r.ok) throw new Error('Upload mislukt: HTTP ' + r.status);
+    loadAttachments(detailState.cardId);
+    toast('📎 ' + file.name + ' geüpload');
+  } catch(e) { toast('⚠ ' + e.message); }
+  input.value = '';
+}
+async function deleteAttachment(attId) {
+  if (!confirm('Bijlage verwijderen?')) return;
+  try {
+    await apiCall('DELETE', '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/' + attId);
+    loadAttachments(detailState.cardId);
+    toast('Bijlage verwijderd');
+  } catch(e) { toast('⚠ ' + e.message); }
+}
+window.addDriveAttachment = addDriveAttachment;
+window.uploadFileAttachment = uploadFileAttachment;
+window.deleteAttachment = deleteAttachment;
 
 // Expose functies op window (nodig voor onclick in dynamische HTML)
 window.switchImportTab = switchImportTab;
