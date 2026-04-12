@@ -471,6 +471,11 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
         <input class="cl-new" id="clNew" placeholder="+ Subtaak toevoegen (Enter)">
       </div>
       <div>
+        <div class="dp-sec">Bronkaarten <span style="font-weight:400;font-size:9px;color:var(--t4)">(uit eerdere fases)</span></div>
+        <div id="dpLinkedCards" style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px;"></div>
+        <button class="btn btn-ghost" style="width:100%;font-size:11px;justify-content:center;" onclick="openLinkCardPicker()">+ Koppel bronkaart</button>
+      </div>
+      <div>
         <div class="dp-sec">Bijlagen</div>
         <div id="dpAttachments" style="display:flex;flex-direction:column;gap:4px;margin-bottom:8px;"></div>
         <div style="display:flex;gap:4px;">
@@ -484,6 +489,8 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
     </div>
     <div class="dp-footer">
       <button class="btn btn-ghost" id="btnArchiveCard" style="color:var(--ci);">📦 Archiveer</button>
+      <button class="btn btn-ghost" id="btnArchiveChain" style="color:var(--green);display:none;" onclick="archiveChain()">📦 Keten archiveren</button>
+      <button class="btn btn-ghost" id="btnResetChain" style="color:var(--amber);display:none;" onclick="resetChain()">🔄 Keten reset</button>
       <button class="btn btn-danger" id="btnDelCard">🗑 Verwijder</button>
       <div style="display:flex;gap:7px">
         <button class="btn btn-ghost" id="btnCancelDetail">Annuleer</button>
@@ -1403,7 +1410,9 @@ function cardHTML(c, phaseId) {
     '<div class="card-type-row"><span class="card-type-ico">' + (typeIcos[c.type]||'📝') + '</span>' + prioHtml + '</div>' +
     (c.title ? '<div class="card-title">' + esc(c.title) + '</div>' : '') +
     preview + tagsHtml +
-    '<div class="card-bottom"><span class="card-date">' + fmtDate(c.createdAt) + '</span>' + dueHtml + clHtml + '</div>' +
+    '<div class="card-bottom"><span class="card-date">' + fmtDate(c.createdAt) + '</span>' + dueHtml + clHtml +
+    (c.linkedCards && c.linkedCards.length ? '<span style="margin-left:auto;font-size:10px;color:var(--co);font-family:Geist Mono,monospace;" title="' + c.linkedCards.length + ' bronkaart(en)">🔗' + c.linkedCards.length + '</span>' : '') +
+    '</div>' +
     clBar +
     '<button class="card-del" data-action="deletecard" data-card="' + c.id + '" data-phase="' + phaseId + '">✕</button>' +
     '</div>';
@@ -1583,19 +1592,54 @@ function setupDragDrop() {
       if (!dragState.cardId || dragState.phaseId === targetPhase) return;
       const p = getProj(curProjId);
       if (!p) return;
+      const srcPhaseIdx = PHASES.findIndex(x => x.id === dragState.phaseId);
+      const tgtPhaseIdx = PHASES.findIndex(x => x.id === targetPhase);
       const src = p.phases[dragState.phaseId] || [];
       const idx = src.findIndex(c => c.id === dragState.cardId);
       if (idx === -1) return;
-      const [card] = src.splice(idx, 1);
-      card.phase = targetPhase;
-      if (!p.phases[targetPhase]) p.phases[targetPhase] = [];
-      p.phases[targetPhase].push(card);
-      save();
-      syncUpsertCard(p.id, card);
-      renderBoard(p);
-      renderPhaseOv(p);
-      const ph = PHASES.find(x => x.id === targetPhase);
-      toast('Verplaatst naar ' + (ph ? ph.label : targetPhase));
+
+      if (tgtPhaseIdx > srcPhaseIdx) {
+        // Naar latere fase: maak KOPIE als linkedCard, origineel blijft staan
+        const origCard = src[idx];
+        const newCard = {
+          id: uid(), phase: targetPhase, type: origCard.type,
+          title: origCard.title, content: origCard.content,
+          url: origCard.url, priority: origCard.priority,
+          due: origCard.due, tags: [...(origCard.tags||[])],
+          checklist: [], createdAt: new Date().toISOString(),
+          linkedCards: [{ id: origCard.id, phase: dragState.phaseId }],
+          chainId: origCard.chainId || uid()
+        };
+        // Geef origineel dezelfde chainId
+        if (!origCard.chainId) origCard.chainId = newCard.chainId;
+        // Kopieer bestaande linkedCards van origineel door
+        if (origCard.linkedCards) {
+          origCard.linkedCards.forEach(lc => {
+            if (!newCard.linkedCards.find(x => x.id === lc.id)) newCard.linkedCards.push(lc);
+          });
+        }
+        if (!p.phases[targetPhase]) p.phases[targetPhase] = [];
+        p.phases[targetPhase].push(newCard);
+        save();
+        syncUpsertCard(p.id, origCard);
+        syncUpsertCard(p.id, newCard);
+        renderBoard(p);
+        renderPhaseOv(p);
+        const ph = PHASES.find(x => x.id === targetPhase);
+        toast('🔗 Gekoppeld naar ' + (ph ? ph.label : targetPhase));
+      } else {
+        // Naar eerdere/zelfde fase: gewoon verplaatsen
+        const [card] = src.splice(idx, 1);
+        card.phase = targetPhase;
+        if (!p.phases[targetPhase]) p.phases[targetPhase] = [];
+        p.phases[targetPhase].push(card);
+        save();
+        syncUpsertCard(p.id, card);
+        renderBoard(p);
+        renderPhaseOv(p);
+        const ph = PHASES.find(x => x.id === targetPhase);
+        toast('Verplaatst naar ' + (ph ? ph.label : targetPhase));
+      }
     });
   });
 }
@@ -1638,7 +1682,13 @@ function openDetail(cardId, phaseId) {
   archBtn.textContent = card.archived ? '📦 Herstel' : '📦 Archiveer';
   archBtn.style.color = card.archived ? 'var(--green)' : 'var(--ci)';
 
+  // Keten-knoppen tonen als er linkedCards zijn
+  const hasChain = card.linkedCards && card.linkedCards.length > 0;
+  document.getElementById('btnArchiveChain').style.display = hasChain ? '' : 'none';
+  document.getElementById('btnResetChain').style.display = hasChain ? '' : 'none';
+
   document.getElementById('detailOv').classList.add('open');
+  renderLinkedCards();
   loadAttachments(cardId);
 }
 
@@ -2725,6 +2775,202 @@ async function deleteAttachment(attId) {
     toast('Bijlage verwijderd');
   } catch(e) { toast('⚠ ' + e.message); }
 }
+// ── KAART-LINKING & KETEN FLOW ──
+// linkedCards: array van {id, phase} — bronkaarten uit eerdere fases
+// chainId: groepeert kaarten in dezelfde HAF-loop cyclus
+
+function getCardFromProject(p, cardId) {
+  for (const ph of PHASES) {
+    const c = (p.phases[ph.id]||[]).find(x => x.id === cardId);
+    if (c) return { card: c, phase: ph };
+  }
+  return null;
+}
+
+function renderLinkedCards() {
+  const el = document.getElementById('dpLinkedCards');
+  const p = getProj(detailState.projId);
+  if (!p || !detailState.cardId) { el.innerHTML = ''; return; }
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  if (!card || !card.linkedCards || !card.linkedCards.length) {
+    el.innerHTML = '<div style="font-size:11px;color:var(--t4);">Geen bronkaarten gekoppeld</div>';
+    return;
+  }
+  el.innerHTML = card.linkedCards.map(lc => {
+    const found = getCardFromProject(p, lc.id);
+    if (!found) return '';
+    const ph = found.phase;
+    return '<div style="display:flex;align-items:center;gap:6px;padding:5px 8px;background:var(--s2);border:1px solid var(--b1);border-radius:var(--rs);font-size:12px;">' +
+      '<span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;background:' + ph.bg + ';color:' + ph.color + ';">' + ph.label + '</span>' +
+      '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer;color:var(--co);" onclick="viewLinkedCard(\'' + lc.id + '\',\'' + ph.id + '\')">' + esc(found.card.title || 'Naamloos') + '</span>' +
+      '<button onclick="unlinkCard(\'' + lc.id + '\')" style="background:none;border:none;color:var(--t4);cursor:pointer;font-size:11px;">✕</button>' +
+      '</div>';
+  }).join('');
+}
+
+function viewLinkedCard(cardId, phaseId) {
+  document.getElementById('detailOv').classList.remove('open');
+  setTimeout(() => openDetail(cardId, phaseId), 200);
+}
+window.viewLinkedCard = viewLinkedCard;
+
+function unlinkCard(linkedId) {
+  const p = getProj(detailState.projId);
+  if (!p) return;
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  if (!card || !card.linkedCards) return;
+  card.linkedCards = card.linkedCards.filter(lc => lc.id !== linkedId);
+  save();
+  syncUpsertCard(p.id, card);
+  renderLinkedCards();
+  toast('Bronkaart ontkoppeld');
+}
+window.unlinkCard = unlinkCard;
+
+function openLinkCardPicker() {
+  const p = getProj(detailState.projId);
+  if (!p) return;
+  const curPhaseIdx = PHASES.findIndex(x => x.id === detailState.phaseId);
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  const existingIds = new Set((card?.linkedCards||[]).map(lc => lc.id));
+
+  // Toon kaarten uit eerdere fases (en huidige)
+  let pickerEl = document.getElementById('linkPickerOv');
+  if (!pickerEl) {
+    pickerEl = document.createElement('div');
+    pickerEl.id = 'linkPickerOv';
+    pickerEl.className = 'modal-ov';
+    pickerEl.style.zIndex = '250';
+    document.body.appendChild(pickerEl);
+    pickerEl.addEventListener('click', e => { if (e.target === pickerEl) pickerEl.classList.remove('open'); });
+  }
+
+  let html = '<div class="modal" style="width:460px;max-height:80vh;overflow-y:auto;">' +
+    '<div class="modal-title">🔗 Bronkaart koppelen</div>' +
+    '<div class="modal-sub">Selecteer kaarten uit eerdere fases als bron</div>';
+
+  let hasCards = false;
+  PHASES.forEach((ph, idx) => {
+    if (idx > curPhaseIdx) return; // alleen eerdere + huidige fase
+    const cards = (p.phases[ph.id]||[]).filter(c => c.id !== detailState.cardId && !c.archived && !existingIds.has(c.id));
+    if (!cards.length) return;
+    hasCards = true;
+    html += '<div style="margin-top:10px;"><div style="font-size:10px;font-weight:700;letter-spacing:.06em;color:' + ph.color + ';margin-bottom:4px;">' + ph.label + '</div>';
+    cards.forEach(c => {
+      html += '<div style="display:flex;align-items:center;gap:6px;padding:6px 8px;border:1px solid var(--b1);border-radius:var(--rs);cursor:pointer;margin-bottom:3px;transition:background .1s;" onmouseover="this.style.background=\'var(--s3)\'" onmouseout="this.style.background=\'\'" onclick="linkCardTo(\'' + c.id + '\',\'' + ph.id + '\')">' +
+        '<span style="font-size:14px;">' + ({note:'📝',link:'🔗',image:'🖼'}[c.type]||'📝') + '</span>' +
+        '<span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(c.title || 'Naamloos') + '</span>' +
+        '</div>';
+    });
+    html += '</div>';
+  });
+
+  if (!hasCards) html += '<div style="text-align:center;color:var(--t4);padding:20px;">Geen beschikbare kaarten in eerdere fases</div>';
+  html += '<div class="modal-footer"><button class="btn btn-ghost" onclick="document.getElementById(\'linkPickerOv\').classList.remove(\'open\')">Sluiten</button></div></div>';
+  pickerEl.innerHTML = html;
+  pickerEl.classList.add('open');
+}
+window.openLinkCardPicker = openLinkCardPicker;
+
+function linkCardTo(sourceId, sourcePhase) {
+  const p = getProj(detailState.projId);
+  if (!p) return;
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  if (!card) return;
+  if (!card.linkedCards) card.linkedCards = [];
+  if (card.linkedCards.find(lc => lc.id === sourceId)) return;
+  // Geef de kaarten dezelfde chainId als ze die nog niet hebben
+  if (!card.chainId) card.chainId = uid();
+  const source = getCardFromProject(p, sourceId);
+  if (source && !source.card.chainId) { source.card.chainId = card.chainId; }
+  card.linkedCards.push({ id: sourceId, phase: sourcePhase });
+  save();
+  syncUpsertCard(p.id, card);
+  document.getElementById('linkPickerOv').classList.remove('open');
+  renderLinkedCards();
+  toast('🔗 Bronkaart gekoppeld');
+}
+window.linkCardTo = linkCardTo;
+
+// ── KETEN ARCHIVERING (VALIDEREN → alles archiveren) ──
+function archiveChain() {
+  const p = getProj(detailState.projId);
+  if (!p) return;
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  if (!card) return;
+  if (!confirm('Hele keten archiveren?\n\nDit archiveert deze kaart én alle gekoppelde bronkaarten.')) return;
+
+  const toArchive = new Set();
+  // Verzamel recursief alle linked cards
+  function collectChain(cardId) {
+    if (toArchive.has(cardId)) return;
+    toArchive.add(cardId);
+    const found = getCardFromProject(p, cardId);
+    if (found && found.card.linkedCards) {
+      found.card.linkedCards.forEach(lc => collectChain(lc.id));
+    }
+  }
+  collectChain(card.id);
+
+  // Archiveer alle kaarten in de keten
+  const ts = new Date().toISOString();
+  toArchive.forEach(cid => {
+    const found = getCardFromProject(p, cid);
+    if (found) {
+      found.card.archived = true;
+      found.card.archivedAt = ts;
+      syncUpsertCard(p.id, found.card);
+    }
+  });
+  save();
+  document.getElementById('detailOv').classList.remove('open');
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast('📦 Keten gearchiveerd (' + toArchive.size + ' kaarten)');
+}
+window.archiveChain = archiveChain;
+
+// ── KETEN RESET (terug naar OBSERVEREN met nieuwe intentie) ──
+function resetChain() {
+  const p = getProj(detailState.projId);
+  if (!p) return;
+  const card = (p.phases[detailState.phaseId]||[]).find(c => c.id === detailState.cardId);
+  if (!card) return;
+  if (!confirm('Keten resetten naar OBSERVEREN?\n\nAlle kaarten in deze keten worden teruggeplaatst naar OBSERVEREN voor een nieuwe cyclus.')) return;
+
+  const toReset = new Set();
+  function collectChain(cardId) {
+    if (toReset.has(cardId)) return;
+    toReset.add(cardId);
+    const found = getCardFromProject(p, cardId);
+    if (found && found.card.linkedCards) {
+      found.card.linkedCards.forEach(lc => collectChain(lc.id));
+    }
+  }
+  collectChain(card.id);
+
+  // Verplaats alle kaarten naar OBSERVEREN
+  toReset.forEach(cid => {
+    PHASES.forEach(ph => {
+      const idx = (p.phases[ph.id]||[]).findIndex(c => c.id === cid);
+      if (idx !== -1) {
+        const [c] = p.phases[ph.id].splice(idx, 1);
+        c.phase = 'observeren';
+        c.chainId = uid(); // nieuwe cyclus
+        if (!p.phases.observeren) p.phases.observeren = [];
+        p.phases.observeren.push(c);
+        syncUpsertCard(p.id, c);
+      }
+    });
+  });
+  save();
+  document.getElementById('detailOv').classList.remove('open');
+  renderBoard(p);
+  renderPhaseOv(p);
+  toast('🔄 Keten gereset naar OBSERVEREN (' + toReset.size + ' kaarten)');
+}
+window.resetChain = resetChain;
+
 window.addDriveAttachment = addDriveAttachment;
 window.uploadFileAttachment = uploadFileAttachment;
 window.deleteAttachment = deleteAttachment;
