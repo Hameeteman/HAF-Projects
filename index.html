@@ -2421,17 +2421,110 @@ function renderAttachments(atts) {
   }).join('');
 }
 async function addDriveAttachment() {
-  const url = prompt('Plak de Google Drive link:');
-  if (!url || !url.trim()) return;
-  const name = prompt('Naam voor dit bestand:', url.split('/').pop() || 'Drive bestand');
-  if (!name) return;
+  // Gebruik Google OAuth token om Drive te doorzoeken
+  if (!googleAccessToken) {
+    // Probeer eerst Google te verbinden
+    if (GOOGLE_CLIENT_ID === 'GOOGLE_CLIENT_ID_PLACEHOLDER') {
+      const url = prompt('Plak de Google Drive link:');
+      if (!url || !url.trim()) return;
+      const name = prompt('Naam:', url.split('/').pop() || 'Drive bestand');
+      if (!name) return;
+      try {
+        await apiCall('POST', '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/drive', { name: name.trim(), driveUrl: url.trim() });
+        loadAttachments(detailState.cardId);
+        toast('📁 Drive bijlage toegevoegd');
+      } catch(e) { toast('⚠ ' + e.message); }
+      return;
+    }
+    toast('📁 Verbinden met Google Drive...');
+    try {
+      await new Promise((resolve, reject) => {
+        const client = google.accounts.oauth2.initTokenClient({
+          client_id: GOOGLE_CLIENT_ID,
+          scope: 'https://www.googleapis.com/auth/drive.readonly',
+          callback: (resp) => { if (resp.error) reject(resp.error); else { googleAccessToken = resp.access_token; resolve(); } }
+        });
+        client.requestAccessToken();
+      });
+    } catch(e) { toast('⚠ Google verbinding mislukt'); return; }
+  }
+  openDrivePicker();
+}
+
+// Drive picker — zoek en selecteer bestanden
+function openDrivePicker() {
+  // Maak een picker-overlay
+  let pickerEl = document.getElementById('drivePickerOv');
+  if (!pickerEl) {
+    pickerEl = document.createElement('div');
+    pickerEl.id = 'drivePickerOv';
+    pickerEl.className = 'modal-ov';
+    pickerEl.innerHTML = '<div class="modal" style="width:500px;max-height:80vh;display:flex;flex-direction:column;">' +
+      '<div class="modal-title">📁 Google Drive — bestand kiezen</div>' +
+      '<div style="margin:10px 0;"><input class="form-input" id="driveSearch" placeholder="Zoek in Drive..." autofocus></div>' +
+      '<div id="driveResults" style="flex:1;overflow-y:auto;min-height:200px;max-height:400px;display:flex;flex-direction:column;gap:4px;"></div>' +
+      '<div class="modal-footer"><button class="btn btn-ghost" onclick="closeDrivePicker()">Annuleer</button></div>' +
+      '</div>';
+    pickerEl.addEventListener('click', e => { if (e.target === pickerEl) closeDrivePicker(); });
+    document.body.appendChild(pickerEl);
+    // Zoek bij typen
+    document.getElementById('driveSearch').addEventListener('input', debounce(function() { searchDrive(this.value); }, 400));
+  }
+  pickerEl.classList.add('open');
+  document.getElementById('driveSearch').value = '';
+  document.getElementById('driveResults').innerHTML = '<div style="text-align:center;color:var(--t4);padding:30px;font-size:12px;">Typ om te zoeken in je Google Drive</div>';
+  document.getElementById('driveSearch').focus();
+}
+function closeDrivePicker() {
+  const el = document.getElementById('drivePickerOv');
+  if (el) el.classList.remove('open');
+}
+window.closeDrivePicker = closeDrivePicker;
+
+function debounce(fn, ms) { let t; return function(...a) { clearTimeout(t); t = setTimeout(() => fn.apply(this, a), ms); }; }
+
+async function searchDrive(q) {
+  const el = document.getElementById('driveResults');
+  if (!q.trim()) { el.innerHTML = '<div style="text-align:center;color:var(--t4);padding:30px;font-size:12px;">Typ om te zoeken in je Google Drive</div>'; return; }
+  el.innerHTML = '<div style="text-align:center;color:var(--t3);padding:20px;font-size:12px;">Zoeken...</div>';
   try {
-    toast('📁 Drive link opslaan...');
-    await apiCall('POST', '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/drive', { name: name.trim(), driveUrl: url.trim() });
+    const r = await fetch('https://www.googleapis.com/drive/v3/files?q=' + encodeURIComponent("name contains '" + q.replace(/'/g, "\\'") + "' and trashed=false") + '&fields=files(id,name,mimeType,webViewLink,iconLink,modifiedTime,size)&pageSize=15&orderBy=modifiedTime desc', {
+      headers: { 'Authorization': 'Bearer ' + googleAccessToken }
+    });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const d = await r.json();
+    if (!d.files || !d.files.length) { el.innerHTML = '<div style="text-align:center;color:var(--t4);padding:20px;font-size:12px;">Geen resultaten voor "' + esc(q) + '"</div>'; return; }
+
+    const mimeIcons = { 'application/vnd.google-apps.document':'📄', 'application/vnd.google-apps.spreadsheet':'📊', 'application/vnd.google-apps.presentation':'📽', 'application/vnd.google-apps.folder':'📁', 'application/pdf':'📕', 'image/':'🖼' };
+    el.innerHTML = d.files.map(f => {
+      let icon = '📎';
+      for (const [k,v] of Object.entries(mimeIcons)) { if (f.mimeType.startsWith(k)) { icon = v; break; } }
+      const size = f.size ? (f.size > 1048576 ? (f.size/1048576).toFixed(1)+'MB' : Math.round(f.size/1024)+'KB') : '';
+      const date = f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString('nl-NL',{day:'2-digit',month:'short'}) : '';
+      return '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid var(--b1);border-radius:var(--rs);cursor:pointer;transition:background .1s;" onmouseover="this.style.background=\'var(--s3)\'" onmouseout="this.style.background=\'\'" onclick="selectDriveFile(\'' + esc(f.id) + '\',\'' + esc(f.name.replace(/'/g, '')) + '\',\'' + esc(f.webViewLink||'') + '\')">' +
+        '<span style="font-size:18px;">' + icon + '</span>' +
+        '<div style="flex:1;min-width:0;">' +
+        '<div style="font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(f.name) + '</div>' +
+        '<div style="font-size:10px;color:var(--t4);font-family:Geist Mono,monospace;">' + date + (size ? ' · ' + size : '') + '</div>' +
+        '</div></div>';
+    }).join('');
+  } catch(e) {
+    if (e.message.includes('401')) { googleAccessToken = null; toast('⚠ Google sessie verlopen — probeer opnieuw'); closeDrivePicker(); return; }
+    el.innerHTML = '<div style="color:var(--red);padding:10px;font-size:12px;">⚠ ' + esc(e.message) + '</div>';
+  }
+}
+
+async function selectDriveFile(fileId, name, webViewLink) {
+  const driveUrl = webViewLink || ('https://drive.google.com/file/d/' + fileId + '/view');
+  try {
+    toast('📁 ' + name + ' toevoegen...');
+    await apiCall('POST', '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/drive', { name, driveUrl });
+    closeDrivePicker();
     loadAttachments(detailState.cardId);
-    toast('📁 Drive bijlage toegevoegd');
+    toast('📁 ' + name + ' toegevoegd');
   } catch(e) { toast('⚠ ' + e.message); }
 }
+window.selectDriveFile = selectDriveFile;
 async function uploadFileAttachment(input) {
   const file = input.files && input.files[0];
   if (!file) return;
