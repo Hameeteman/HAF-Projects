@@ -1390,7 +1390,8 @@ function cardHTML(c, phaseId) {
   let preview = '';
   if (c.type === 'note' && c.content) preview = '<div class="card-preview">' + esc(c.content.substring(0,88)) + (c.content.length>88?'…':'') + '</div>';
   if (c.type === 'link' && c.url) preview = '<a class="card-link" href="' + esc(c.url) + '" target="_blank" data-action="stopclick">🔗 ' + esc(truncUrl(c.url)) + '</a>';
-  if (c.type === 'image' && c.imageData) preview = '<img class="card-img" src="' + c.imageData + '">';
+  const imgSrc = c.imageData || c.imageUrl || '';
+  if (c.type === 'image' && imgSrc) preview = '<img class="card-img" src="' + imgSrc + '">';
 
   const tagsHtml = (c.tags && c.tags.length) ? '<div class="card-tags">' + c.tags.map(t => '<span class="ctag">' + esc(t) + '</span>').join('') + '</div>' : '';
   const dueHtml = c.due ? dueTagHTML(c.due) : '';
@@ -1537,6 +1538,7 @@ function submitAdd(phaseId) {
   p.phases[phaseId].push(card);
   save();
   syncUpsertCard(p.id, card);
+  if (card.imageData && card.imageData.startsWith('data:')) autoUploadImage(p.id, card);
   cancelAdd(phaseId);
   renderBoard(p);
   renderPhaseOv(p);
@@ -1718,6 +1720,8 @@ function saveDetail() {
   card.tags = [...detailState.tags];
   card.checklist = detailState.checklist.map(x => ({...x}));
   if (detailState.imgData) card.imageData = detailState.imgData;
+  // Auto-upload afbeelding naar server (async, niet blocking)
+  if (card.imageData && card.imageData.startsWith('data:')) autoUploadImage(p.id, card);
   if (targetPhase !== curPhase) {
     const idx = cards.findIndex(c => c.id === detailState.cardId);
     if (idx !== -1) {
@@ -2481,6 +2485,7 @@ document.addEventListener('paste', function(e) {
           p.phases[phaseId].push(card);
           save();
           syncUpsertCard(p.id, card);
+          autoUploadImage(p.id, card);
           renderBoard(p);
           renderPhaseOv(p);
           toast('🖼 Plaatje geplakt in OBSERVEREN');
@@ -2997,6 +3002,39 @@ function resetChain() {
   toast('🔄 Keten gereset naar OBSERVEREN (' + toReset.size + ' kaarten)');
 }
 window.resetChain = resetChain;
+
+// Auto-upload imageData als bijlage naar CKPS server
+// Vervangt lokale base64 met server-URL zodat afbeeldingen overal beschikbaar zijn
+async function autoUploadImage(projectId, card) {
+  if (!card.imageData || !hasValidToken()) return;
+  if (card.imageData.startsWith('http')) return; // al een URL, geen base64
+  try {
+    // Converteer base64 naar Blob
+    const parts = card.imageData.split(',');
+    const mime = parts[0].match(/:(.*?);/)?.[1] || 'image/jpeg';
+    const bytes = atob(parts[1]);
+    const arr = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+    const blob = new Blob([arr], { type: mime });
+    const ext = mime === 'image/png' ? '.png' : '.jpg';
+    const fileName = (card.title || 'afbeelding').replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30) + ext;
+
+    // Upload als bijlage
+    const formData = new FormData();
+    formData.append('file', blob, fileName);
+    const r = await fetch(SYNC_BASE + '/projects/' + projectId + '/cards/' + card.id + '/attachments/upload', {
+      method: 'POST', headers: { 'Authorization': 'Bearer ' + CKPS_KEY }, body: formData
+    });
+    if (!r.ok) return;
+    const att = await r.json();
+
+    // Vervang lokale base64 met server-URL
+    card.imageData = SYNC_BASE + att.url;
+    card.imageUrl = SYNC_BASE + att.url;
+    save();
+    console.log('Auto-upload afbeelding:', fileName, '→', att.url);
+  } catch(e) { console.warn('Auto-upload mislukt:', e.message); }
+}
 
 async function analyzeAttachments() {
   const p = getProj(detailState.projId);
