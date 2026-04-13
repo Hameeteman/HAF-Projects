@@ -996,7 +996,7 @@ function getAllDueCards() {
     if (p.status === 'done' && !showArchived) return;
     PHASES.forEach(ph => {
       (p.phases[ph.id]||[]).forEach(c => {
-        if (c.due) cards.push({ ...c, projId: p.id, projName: p.name, projIcon: p.icon || '📋', phaseName: ph.label, phaseColor: ph.color, phaseBg: ph.bg });
+        if (c.due && !c.archived) cards.push({ ...c, projId: p.id, projName: p.name, projIcon: p.icon || '📋', phaseName: ph.label, phaseColor: ph.color, phaseBg: ph.bg });
       });
     });
   });
