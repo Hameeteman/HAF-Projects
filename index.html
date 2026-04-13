@@ -483,8 +483,8 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
         <div style="display:flex;gap:4px;">
           <button class="btn btn-ghost" style="flex:1;font-size:11px;justify-content:center;" onclick="addDriveAttachment()">📁 Google Drive</button>
           <label class="btn btn-ghost" style="flex:1;font-size:11px;justify-content:center;cursor:pointer;">
-            📎 Upload bestand
-            <input type="file" id="dpFileUpload" style="display:none;" onchange="uploadFileAttachment(this)">
+            📎 Upload bestanden
+            <input type="file" id="dpFileUpload" style="display:none;" multiple onchange="uploadMultipleFiles(this)">
           </label>
         </div>
         <button class="btn btn-ghost" id="btnAnalyzeAttachments" style="width:100%;font-size:11px;justify-content:center;margin-top:4px;display:none;" onclick="analyzeAttachments()">🧠 Analyseer bijlagen</button>
@@ -2120,7 +2120,7 @@ async function aiPhaseGate(phaseId) {
       ctx += '\n    Bijlagen:\n';
       for (const a of atts) {
         ctx += '    - ' + (a.type === 'drive' ? '📁 Drive: ' : '📎 ') + a.name;
-        // Probeer Drive doc content op te halen via Google Drive API
+        // Drive documenten: haal tekst op via Drive API
         if (a.drive_url && googleAccessToken) {
           const driveId = extractDriveId(a.drive_url);
           if (driveId) {
@@ -2130,10 +2130,19 @@ async function aiPhaseGate(phaseId) {
               });
               if (r.ok) {
                 const text = await r.text();
-                if (text.length > 0) ctx += '\n      Inhoud: ' + text.substring(0, 2000) + (text.length > 2000 ? '... (afgekapt)' : '');
+                if (text.length > 0) ctx += '\n      Inhoud:\n      ' + text.substring(0, 3000).replace(/\n/g, '\n      ') + (text.length > 3000 ? '\n      ... (afgekapt)' : '');
               }
             } catch(e) {}
           }
+        }
+        // Geüploade bestanden: haal tekst op via CKPS text-extract endpoint
+        if (a.type === 'file' && a.stored_file) {
+          try {
+            const r = await apiCall('GET', '/projects/' + projId + '/cards/' + cardId + '/attachments/' + a.id + '/text');
+            if (r.text && r.text.length > 0) {
+              ctx += '\n      Inhoud:\n      ' + r.text.replace(/\n/g, '\n      ') + (r.truncated ? '\n      ... (afgekapt na ' + r.totalLength + ' tekens)' : '');
+            }
+          } catch(e) {}
         }
         ctx += '\n';
       }
@@ -2938,23 +2947,28 @@ async function selectDriveFile(fileId, name, webViewLink) {
   } catch(e) { toast('⚠ ' + e.message); }
 }
 window.selectDriveFile = selectDriveFile;
-async function uploadFileAttachment(input) {
-  const file = input.files && input.files[0];
-  if (!file) return;
-  if (file.size > 10 * 1024 * 1024) { toast('⚠ Max 10MB per bestand'); return; }
-  toast('📎 Uploaden: ' + file.name + '...');
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    const r = await fetch(SYNC_BASE + '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/upload', {
-      method: 'POST', headers: { 'Authorization': 'Bearer ' + CKPS_KEY }, body: formData
-    });
-    if (!r.ok) throw new Error('Upload mislukt: HTTP ' + r.status);
-    loadAttachments(detailState.cardId);
-    toast('📎 ' + file.name + ' geüpload');
-  } catch(e) { toast('⚠ ' + e.message); }
+async function uploadMultipleFiles(input) {
+  const files = input.files;
+  if (!files || !files.length) return;
+  let uploaded = 0, failed = 0;
+  toast('📎 ' + files.length + ' bestanden uploaden...');
+  for (const file of files) {
+    if (file.size > 10 * 1024 * 1024) { toast('⚠ ' + file.name + ' te groot (max 10MB)'); failed++; continue; }
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const r = await fetch(SYNC_BASE + '/projects/' + detailState.projId + '/cards/' + detailState.cardId + '/attachments/upload', {
+        method: 'POST', headers: { 'Authorization': 'Bearer ' + CKPS_KEY }, body: formData
+      });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      uploaded++;
+    } catch(e) { failed++; }
+  }
+  loadAttachments(detailState.cardId);
+  toast('📎 ' + uploaded + ' geüpload' + (failed ? ', ' + failed + ' mislukt' : ''));
   input.value = '';
 }
+window.uploadMultipleFiles = uploadMultipleFiles;
 async function deleteAttachment(attId) {
   if (!confirm('Bijlage verwijderen?')) return;
   try {
