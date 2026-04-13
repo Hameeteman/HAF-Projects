@@ -878,13 +878,19 @@ async function fullPull() {
       const merged = { ...(local ? local.proj : {}), ...sp, phases: {} };
       PHASES.forEach(ph => merged.phases[ph.id] = []);
 
-      // Stap 2a: voeg alle server-kaarten toe (server is bron van waarheid voor bestaande kaarten)
+      // Stap 2a: voeg alle server-kaarten toe (server is bron van waarheid)
+      // Maar behoud lokale imageData die niet op de server staat
       const serverCardIds = new Set();
       (sp.cards||[]).forEach(sc => {
         sc.due = sc.dueDate;
         if (!sc.linkedCards) sc.linkedCards = [];
         sc.archived = !!sc.archived;
         serverCardIds.add(sc.id);
+        // Behoud lokale imageData als server die niet heeft
+        if (local) {
+          const lc = local.cardById[sc.id];
+          if (lc && lc.card.imageData && !sc.imageData) sc.imageData = lc.card.imageData;
+        }
         if (!merged.phases[sc.phase]) merged.phases[sc.phase] = [];
         merged.phases[sc.phase].push(sc);
       });
