@@ -813,7 +813,8 @@ async function syncUpsertCard(projectId, card) {
     id:card.id, phase:card.phase, type:card.type, title:card.title,
     content:card.content, url:card.url, priority:card.priority,
     dueDate:card.due, tags:card.tags||[], position:card.position||0, fromDesc:!!card.fromDesc,
-    linkedCards:card.linkedCards||[], chainId:card.chainId||null, archived:!!card.archived
+    linkedCards:card.linkedCards||[], chainId:card.chainId||null, archived:!!card.archived,
+    imageUrl: card.imageUrl || (card.imageData && card.imageData.startsWith('http') ? card.imageData : null)
   };
   try {
     try { await apiCall('PUT', '/projects/' + projectId + '/cards/' + card.id, body); }
@@ -890,6 +891,7 @@ async function fullPull() {
       const serverCardIds = new Set();
       (sp.cards||[]).forEach(sc => {
         sc.due = sc.dueDate;
+        if (sc.imageUrl && !sc.imageData) sc.imageData = sc.imageUrl;
         if (!sc.linkedCards) sc.linkedCards = [];
         sc.archived = !!sc.archived;
         serverCardIds.add(sc.id);
@@ -3176,10 +3178,12 @@ async function autoUploadImage(projectId, card) {
     if (!r.ok) return;
     const att = await r.json();
 
-    // Vervang lokale base64 met server-URL
+    // Vervang lokale base64 met server-URL en sync naar server
     card.imageData = SYNC_BASE + att.url;
     card.imageUrl = SYNC_BASE + att.url;
     save();
+    // Sync de kaart zodat andere devices de URL ook krijgen
+    await syncUpsertCard(projectId, card);
     console.log('Auto-upload afbeelding:', fileName, '→', att.url);
   } catch(e) { console.warn('Auto-upload mislukt:', e.message); }
 }
