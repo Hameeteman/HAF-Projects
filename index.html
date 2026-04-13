@@ -1215,7 +1215,7 @@ function renderPhaseOv(p) {
 function renderBoard(p) {
   const container = document.getElementById('boardCols');
   let h = '';
-  PHASES.forEach(ph => {
+  PHASES.forEach((ph, idx) => {
     const allCards = p.phases[ph.id] || [];
     const filtered = allCards.filter(c => passFilter(c));
     h += '<div class="col" id="col-' + ph.id + '" data-phase="' + ph.id + '" style="--cc:' + ph.color + ';--cb:' + ph.bg + '">' +
@@ -1226,6 +1226,7 @@ function renderBoard(p) {
       '<div class="col-actions">' +
       '<button class="col-ask" data-action="openchat" data-proj="' + p.id + '" data-phase="' + ph.id + '" style="flex:2;">⬡ Claude</button>' +
       (allCards.length >= 2 ? '<button class="col-ask" onclick="aiColumnSummary(\'' + ph.id + '\')" style="flex:1;font-size:10px;">🧠</button>' : '') +
+      (allCards.length >= 1 && idx < 5 ? '<button class="col-ask" onclick="aiPhaseGate(\'' + ph.id + '\')" style="flex:1;font-size:10px;" title="Analyseer en rond af naar volgende fase">→</button>' : '') +
       '<button class="col-add-btn" data-action="toggleadd" data-phase="' + ph.id + '">+ Toevoegen</button>' +
       '</div>' +
       '<div class="add-inline" id="addinline-' + ph.id + '">' +
@@ -2064,6 +2065,124 @@ async function aiCrossProjectAnalysis() {
 }
 
 // Expose op window voor onclick
+// ── AI FASE-GATE — analyseer of fase klaar is voor doorstoot ──
+async function aiPhaseGate(phaseId) {
+  const p = getProj(curProjId); if (!p) return;
+  const phaseIdx = PHASES.findIndex(x => x.id === phaseId);
+  const curPhase = PHASES[phaseIdx];
+  const nextPhase = PHASES[phaseIdx + 1];
+  if (!nextPhase) { toast('Dit is de laatste fase'); return; }
+
+  const cards = (p.phases[phaseId]||[]).filter(c => !c.archived);
+  if (!cards.length) { toast('Geen kaarten in ' + curPhase.label); return; }
+
+  toast('🧠 Claude analyseert ' + curPhase.label + ' → ' + nextPhase.label + '...');
+
+  // Verzamel alle content inclusief recursief gekoppelde bronkaarten
+  function collectCardContext(card, depth) {
+    if (depth > 3) return '';
+    let ctx = '  - ' + (card.title||'Naamloos');
+    if (card.content) ctx += ': ' + card.content.substring(0, 150);
+    if (card.url) ctx += ' (' + card.url + ')';
+    ctx += '\n';
+    if (card.linkedCards && card.linkedCards.length) {
+      card.linkedCards.forEach(lc => {
+        const found = getCardFromProject(p, lc.id);
+        if (found) ctx += '    [bron ' + found.phase.label + '] ' + collectCardContext(found.card, depth+1);
+      });
+    }
+    return ctx;
+  }
+
+  let cardsCtx = curPhase.label + ' — ' + cards.length + ' kaarten:\n';
+  cards.forEach(c => { cardsCtx += collectCardContext(c, 0); });
+
+  // Context van eerdere fases
+  let earlierCtx = '';
+  for (let i = 0; i < phaseIdx; i++) {
+    const phCards = (p.phases[PHASES[i].id]||[]).filter(c => !c.archived);
+    if (phCards.length) {
+      earlierCtx += '\n' + PHASES[i].label + ' (' + phCards.length + '):\n';
+      phCards.forEach(c => { earlierCtx += '  - ' + (c.title||'') + (c.content ? ': ' + c.content.substring(0,80) : '') + '\n'; });
+    }
+  }
+
+  const sys = 'Je bent een HAF-loop fase-gate reviewer. De HAF-loop is: INTENTIE → OBSERVEREN → PLANNEN → ACTEREN → VALIDEREN → ADAPTEREN.\n\n' +
+    'Analyseer of de fase ' + curPhase.label + ' voldoende afgerond is om door te gaan naar ' + nextPhase.label + '.\n\n' +
+    'Geef je analyse in dit formaat:\n\n' +
+    '## Beoordeling: ' + curPhase.label + ' → ' + nextPhase.label + '\n\n' +
+    '### Status: GEREED / NIET GEREED\n' +
+    'Eén zin waarom.\n\n' +
+    '### Samenvatting\n' +
+    'Wat is de kern van wat er in ' + curPhase.label + ' verzameld/besloten is? (max 3 zinnen)\n\n' +
+    '### Sterke punten\n' +
+    'Wat is goed voorbereid? (bullets)\n\n' +
+    '### Ontbrekend / Risico\n' +
+    'Wat mist er nog of vormt een risico voor ' + nextPhase.label + '? (bullets, of "Niets" als compleet)\n\n' +
+    '### Aanbevolen conclusie voor ' + nextPhase.label + '\n' +
+    'Formuleer een concrete conclusie-kaart die in ' + nextPhase.label + ' geplaatst kan worden. ' +
+    'Dit is een samenvatting van alle inzichten uit ' + curPhase.label + ' als startpunt voor de volgende fase.\n\n' +
+    'Antwoord in het Nederlands. Wees concreet en specifiek.';
+
+  const user = 'Project: "' + p.name + '"\nIntentie: "' + (p.desc||'Niet gedefinieerd') + '"\n\n' + cardsCtx + earlierCtx;
+
+  try {
+    const reply = await aiCall(sys, user, 4096);
+
+    // Toon resultaat in chat-panel
+    openChatPanel(curProjId, phaseId);
+    chatHistory = [];
+    const fullReply = '🔀 **Fase-gate: ' + curPhase.label + ' → ' + nextPhase.label + '**\n\n' + reply +
+      '\n\n---\n*Wil je de conclusie-kaart aanmaken in ' + nextPhase.label + '? Klik hieronder.*';
+    chatHistory.push({role:'assistant', content: fullReply});
+    const msgs = document.getElementById('chatMsgs');
+    msgs.innerHTML = '';
+    addBotMsg(fullReply);
+
+    // Voeg actie-knoppen toe onderaan chat
+    const btnContainer = document.createElement('div');
+    btnContainer.style.cssText = 'display:flex;gap:6px;padding:10px 14px;';
+    btnContainer.innerHTML =
+      '<button class="btn btn-primary" style="flex:1;justify-content:center;font-size:12px;" id="btnAcceptGate">✓ Maak conclusie-kaart in ' + nextPhase.label + '</button>' +
+      '<button class="btn btn-ghost" style="flex:1;justify-content:center;font-size:12px;" id="btnRejectGate">✕ Niet doorstoten</button>';
+    msgs.parentElement.appendChild(btnContainer);
+
+    // Extract conclusie uit het AI-antwoord (tekst na "Aanbevolen conclusie")
+    const conclusionMatch = reply.match(/(?:Aanbevolen conclusie|conclusie voor)[^]*?\n\n([\s\S]*?)(?:\n\n---|\n\n###|$)/i);
+    const conclusionText = conclusionMatch ? conclusionMatch[1].trim() : reply.substring(0, 300);
+
+    document.getElementById('btnAcceptGate').addEventListener('click', () => {
+      // Maak conclusie-kaart aan in de volgende fase
+      const newCard = {
+        id: uid(), phase: nextPhase.id, type: 'note',
+        title: '📋 Conclusie ' + curPhase.label + ': ' + (p.name||'').substring(0, 30),
+        content: conclusionText,
+        priority: 'high',
+        tags: ['fase-gate', curPhase.id + '→' + nextPhase.id],
+        linkedCards: cards.map(c => ({ id: c.id, phase: phaseId })),
+        chainId: cards[0]?.chainId || uid(),
+        checklist: [], createdAt: new Date().toISOString()
+      };
+      if (!p.phases[nextPhase.id]) p.phases[nextPhase.id] = [];
+      p.phases[nextPhase.id].unshift(newCard);
+      save();
+      syncUpsertCard(p.id, newCard);
+      btnContainer.remove();
+      closeChatPanel();
+      renderBoard(p);
+      renderPhaseOv(p);
+      toast('✓ Conclusie-kaart aangemaakt in ' + nextPhase.label);
+    });
+
+    document.getElementById('btnRejectGate').addEventListener('click', () => {
+      btnContainer.remove();
+      toast('Fase-gate geannuleerd — werk verder in ' + curPhase.label);
+    });
+
+  } catch(e) { toast('⚠ AI niet beschikbaar: ' + e.message); }
+}
+window.aiPhaseGate = aiPhaseGate;
+
 window.aiColumnSummary = aiColumnSummary;
 window.aiProjectAnalysis = aiProjectAnalysis;
 window.aiCrossProjectAnalysis = aiCrossProjectAnalysis;
