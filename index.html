@@ -838,19 +838,24 @@ async function syncDeleteCard(projectId, cardId) {
 async function fullPush() {
   if (!hasValidToken()) return;
   toast('⬆ Alle projecten syncen...');
-  let count = 0;
+  let count = 0, imgCount = 0;
   for (const p of projects) {
     try {
       await syncUpsertProject(p);
       for (const ph of PHASES) {
         for (const c of (p.phases[ph.id]||[])) {
-          c.phase = ph.id; // zorg dat phase gezet is
+          c.phase = ph.id;
           try { await syncUpsertCard(p.id, c); count++; } catch(e) {}
+          // Auto-upload afbeeldingen die nog als base64 lokaal staan
+          if (c.imageData && c.imageData.startsWith('data:')) {
+            try { await autoUploadImage(p.id, c); imgCount++; } catch(e) {}
+          }
         }
       }
     } catch(e) {}
   }
-  toast('⬆ ' + count + ' kaarten gesynct');
+  save(); // sla geüpdatete imageData URLs op
+  toast('⬆ ' + count + ' kaarten gesynct' + (imgCount ? ', ' + imgCount + ' afbeeldingen geüpload' : ''));
   updateSyncBadge();
 }
 window.fullPush = fullPush;
@@ -859,6 +864,9 @@ async function fullPull() {
   if (!hasValidToken() || !navigator.onLine) { updateSyncBadge(); return; }
   try {
     const d = await apiCall('GET', '/projects');
+
+    // Tracking of er lokale data is die naar server moet
+    let hasUnsynced = false;
 
     // Stap 1: bouw lokale index — alle kaarten per project per ID
     const localProjects = {};
@@ -878,29 +886,43 @@ async function fullPull() {
       const merged = { ...(local ? local.proj : {}), ...sp, phases: {} };
       PHASES.forEach(ph => merged.phases[ph.id] = []);
 
-      // Stap 2a: voeg alle server-kaarten toe (server is bron van waarheid)
-      // Maar behoud lokale imageData die niet op de server staat
+      // Stap 2a: voeg alle server-kaarten toe, merge met lokale data
       const serverCardIds = new Set();
       (sp.cards||[]).forEach(sc => {
         sc.due = sc.dueDate;
         if (!sc.linkedCards) sc.linkedCards = [];
         sc.archived = !!sc.archived;
         serverCardIds.add(sc.id);
-        // Behoud lokale imageData als server die niet heeft
+
+        // Merge met lokale versie: behoud lokale data die server niet heeft
         if (local) {
           const lc = local.cardById[sc.id];
-          if (lc && lc.card.imageData && !sc.imageData) sc.imageData = lc.card.imageData;
+          if (lc) {
+            // Behoud lokale imageData als server die niet heeft
+            if (lc.card.imageData && !sc.imageData) sc.imageData = lc.card.imageData;
+            // Merge linkedCards: combineer server + lokaal (deduplicate)
+            if (lc.card.linkedCards && lc.card.linkedCards.length) {
+              const existingIds = new Set(sc.linkedCards.map(x => x.id));
+              lc.card.linkedCards.forEach(link => {
+                if (!existingIds.has(link.id)) sc.linkedCards.push(link);
+              });
+            }
+            // Behoud lokale chainId als server die niet heeft
+            if (lc.card.chainId && !sc.chainId) sc.chainId = lc.card.chainId;
+            // Behoud lokale checklist als server die niet heeft
+            if (lc.card.checklist?.length && !sc.checklist?.length) sc.checklist = lc.card.checklist;
+          }
         }
         if (!merged.phases[sc.phase]) merged.phases[sc.phase] = [];
         merged.phases[sc.phase].push(sc);
       });
 
-      // Stap 2b: behoud lokale kaarten die NIET op de server staan (nog niet gesynct)
+      // Stap 2b: behoud lokale kaarten die NIET op de server staan en push ze
       if (local) {
         PHASES.forEach(ph => {
           (local.proj.phases[ph.id]||[]).forEach(lc => {
             if (!serverCardIds.has(lc.id)) {
-              // Lokale kaart niet op server — behouden
+              hasUnsynced = true;
               if (!merged.phases[ph.id]) merged.phases[ph.id] = [];
               merged.phases[ph.id].push(lc);
             }
@@ -912,8 +934,9 @@ async function fullPull() {
     });
 
     // Stap 3: behoud lokale projecten die NIET op de server staan
+    let hasUnsyncedProjects = false;
     projects.forEach(p => {
-      if (!resultById[p.id]) resultById[p.id] = p;
+      if (!resultById[p.id]) { resultById[p.id] = p; hasUnsyncedProjects = true; }
     });
     projects = Object.values(resultById);
     localStorage.setItem(STORE, JSON.stringify(projects));
@@ -921,6 +944,12 @@ async function fullPull() {
     renderDash();
     if (curProjId) { const p = getProj(curProjId); if (p) renderBoard(p); }
     updateSyncBadge();
+
+    // Auto-push: als er lokale data is die niet op de server staat, push nu
+    if (hasUnsynced || hasUnsyncedProjects) {
+      console.log('Auto-push: lokale data naar server syncen...');
+      setTimeout(() => fullPush(), 2000);
+    }
   } catch(e) { updateSyncBadge(); }
 }
 
