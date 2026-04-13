@@ -212,9 +212,9 @@ body{font-family:'Geist',sans-serif;background:var(--bg);color:var(--t1);font-si
 .card:hover .card-del{display:flex;}
 
 /* DETAIL OVERLAY */
-.detail-ov{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:180;display:none;align-items:flex-start;justify-content:flex-end;padding:52px 14px 14px;overflow-y:auto;}
+.detail-ov{position:fixed;inset:0;background:rgba(0,0,0,.25);z-index:180;display:none;align-items:stretch;justify-content:flex-end;padding:52px 14px 14px;overflow:hidden;}
 .detail-ov.open{display:flex;}
-.detail-panel{background:var(--s1);border:1px solid var(--b2);border-radius:var(--rx);width:580px;max-width:100%;max-height:calc(100vh - 70px);overflow-y:auto;animation:su .2s ease;}
+.detail-panel{background:var(--s1);border:1px solid var(--b2);border-radius:var(--rx);width:580px;max-width:100%;overflow-y:auto;animation:su .2s ease;}
 @keyframes su{from{transform:translateY(10px);opacity:0}to{transform:none;opacity:1}}
 .dp-head{padding:18px 22px 14px;border-bottom:1px solid var(--b1);display:flex;gap:9px;align-items:flex-start;}
 .dp-type-ico{font-size:18px;flex-shrink:0;margin-top:3px;}
