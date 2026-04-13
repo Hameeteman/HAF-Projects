@@ -2015,7 +2015,7 @@ function buildProjectContext(p) {
       ctx += ph.label + ' (' + active.length + ' actief):\n';
       active.forEach(c => {
         ctx += '  - [' + (c.type||'note') + '] ' + (c.title||'Naamloos');
-        if (c.content) ctx += ': ' + c.content.substring(0, 80);
+        if (c.content) ctx += ':\n    ' + c.content;
         if (c.url) ctx += ' (' + c.url + ')';
         if (c.due) ctx += ' [deadline: ' + c.due + ']';
         if (c.tags?.length) ctx += ' #' + c.tags.join(' #');
@@ -2026,7 +2026,7 @@ function buildProjectContext(p) {
       archivedCtx += ph.label + ' (' + archived.length + ' gearchiveerd):\n';
       archived.forEach(c => {
         archivedCtx += '  - [ARCHIEF] ' + (c.title||'Naamloos');
-        if (c.content) archivedCtx += ': ' + c.content.substring(0, 60);
+        if (c.content) archivedCtx += ':\n    ' + c.content;
         if (c.archivedAt) archivedCtx += ' [gearchiveerd: ' + c.archivedAt.substring(0,10) + ']';
         archivedCtx += '\n';
       });
@@ -2111,10 +2111,12 @@ async function aiPhaseGate(phaseId) {
 
   // Verzamel alle content inclusief recursief gekoppelde bronkaarten
   function collectCardContext(card, depth) {
-    if (depth > 3) return '';
+    if (depth > 4) return '';
     let ctx = '  - ' + (card.title||'Naamloos');
-    if (card.content) ctx += ': ' + card.content.substring(0, 150);
-    if (card.url) ctx += ' (' + card.url + ')';
+    if (card.content) ctx += ':\n    ' + card.content;
+    if (card.url) ctx += '\n    URL: ' + card.url;
+    if (card.tags?.length) ctx += '\n    Tags: ' + card.tags.join(', ');
+    if (card.due) ctx += '\n    Deadline: ' + card.due;
     ctx += '\n';
     if (card.linkedCards && card.linkedCards.length) {
       card.linkedCards.forEach(lc => {
@@ -2128,13 +2130,13 @@ async function aiPhaseGate(phaseId) {
   let cardsCtx = curPhase.label + ' — ' + cards.length + ' kaarten:\n';
   cards.forEach(c => { cardsCtx += collectCardContext(c, 0); });
 
-  // Context van eerdere fases
+  // Context van eerdere fases — volledige content
   let earlierCtx = '';
   for (let i = 0; i < phaseIdx; i++) {
     const phCards = (p.phases[PHASES[i].id]||[]).filter(c => !c.archived);
     if (phCards.length) {
       earlierCtx += '\n' + PHASES[i].label + ' (' + phCards.length + '):\n';
-      phCards.forEach(c => { earlierCtx += '  - ' + (c.title||'') + (c.content ? ': ' + c.content.substring(0,80) : '') + '\n'; });
+      phCards.forEach(c => { earlierCtx += '  - ' + (c.title||'') + (c.content ? ':\n    ' + c.content : '') + (c.url ? '\n    URL: ' + c.url : '') + '\n'; });
     }
   }
 
@@ -3222,7 +3224,7 @@ async function analyzeAttachments() {
       const found = getCardFromProject(p, lc.id);
       if (found) {
         chainInfo += '- [' + found.phase.label + '] ' + (found.card.title || 'Naamloos');
-        if (found.card.content) chainInfo += ': ' + found.card.content.substring(0, 100);
+        if (found.card.content) chainInfo += ':\n    ' + found.card.content;
         if (found.card.url) chainInfo += ' (' + found.card.url + ')';
         chainInfo += '\n';
       }
