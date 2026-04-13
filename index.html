@@ -2110,25 +2110,63 @@ async function aiPhaseGate(phaseId) {
   toast('🧠 Claude analyseert ' + curPhase.label + ' → ' + nextPhase.label + '...');
 
   // Verzamel alle content inclusief recursief gekoppelde bronkaarten
-  function collectCardContext(card, depth) {
+  // Haal bijlagen + Drive-inhoud op voor een kaart
+  async function getCardAttachmentContext(cardId, projId) {
+    let ctx = '';
+    try {
+      const d = await apiCall('GET', '/projects/' + projId + '/cards/' + cardId + '/attachments');
+      const atts = d.attachments || [];
+      if (!atts.length) return '';
+      ctx += '\n    Bijlagen:\n';
+      for (const a of atts) {
+        ctx += '    - ' + (a.type === 'drive' ? '📁 Drive: ' : '📎 ') + a.name;
+        // Probeer Drive doc content op te halen via Google Drive API
+        if (a.drive_url && googleAccessToken) {
+          const driveId = extractDriveId(a.drive_url);
+          if (driveId) {
+            try {
+              const r = await fetch('https://www.googleapis.com/drive/v3/files/' + driveId + '/export?mimeType=text/plain', {
+                headers: { 'Authorization': 'Bearer ' + googleAccessToken }
+              });
+              if (r.ok) {
+                const text = await r.text();
+                if (text.length > 0) ctx += '\n      Inhoud: ' + text.substring(0, 2000) + (text.length > 2000 ? '... (afgekapt)' : '');
+              }
+            } catch(e) {}
+          }
+        }
+        ctx += '\n';
+      }
+    } catch(e) {}
+    return ctx;
+  }
+
+  function extractDriveId(url) {
+    const m = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    return m ? m[1] : null;
+  }
+
+  async function collectCardContext(card, depth) {
     if (depth > 4) return '';
     let ctx = '  - ' + (card.title||'Naamloos');
     if (card.content) ctx += ':\n    ' + card.content;
     if (card.url) ctx += '\n    URL: ' + card.url;
     if (card.tags?.length) ctx += '\n    Tags: ' + card.tags.join(', ');
     if (card.due) ctx += '\n    Deadline: ' + card.due;
+    // Haal bijlage-info + Drive-inhoud op
+    ctx += await getCardAttachmentContext(card.id, p.id);
     ctx += '\n';
     if (card.linkedCards && card.linkedCards.length) {
-      card.linkedCards.forEach(lc => {
+      for (const lc of card.linkedCards) {
         const found = getCardFromProject(p, lc.id);
-        if (found) ctx += '    [bron ' + found.phase.label + '] ' + collectCardContext(found.card, depth+1);
-      });
+        if (found) ctx += '    [bron ' + found.phase.label + '] ' + await collectCardContext(found.card, depth+1);
+      }
     }
     return ctx;
   }
 
   let cardsCtx = curPhase.label + ' — ' + cards.length + ' kaarten:\n';
-  cards.forEach(c => { cardsCtx += collectCardContext(c, 0); });
+  for (const c of cards) { cardsCtx += await collectCardContext(c, 0); }
 
   // Context van eerdere fases — volledige content
   let earlierCtx = '';
