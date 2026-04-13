@@ -3043,7 +3043,7 @@ async function analyzeAttachments() {
     attInfo + chainInfo;
 
   try {
-    const reply = await aiCall(sys, user, 1500);
+    const reply = await aiCall(sys, user, 4096);
     summaryEl.innerHTML = md(reply);
   } catch(e) {
     summaryEl.innerHTML = '<span style="color:var(--red);">⚠ AI niet beschikbaar: ' + esc(e.message) + '</span>';
