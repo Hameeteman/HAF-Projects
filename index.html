@@ -3525,8 +3525,26 @@ try {
 if (!hasValidToken()) {
   showBootstrap('Klik om dit apparaat te koppelen met je passkey.');
 } else {
-  fullPull();
-  scheduleRetry();
+  // Sync health check: controleer of server bereikbaar is
+  (async function syncHealthCheck() {
+    try {
+      const r = await fetch(SYNC_BASE + '/health', {signal: AbortSignal.timeout(5000)});
+      if (r.ok) {
+        await fullPull();
+        scheduleRetry();
+        // Check of service worker up-to-date is
+        if ('serviceWorker' in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          regs.forEach(r => r.update());
+        }
+      } else {
+        toast('⚠ Server niet bereikbaar — offline modus');
+      }
+    } catch(e) {
+      toast('⚠ Sync niet mogelijk — controleer je verbinding');
+      updateSyncBadge();
+    }
+  })();
 }
 
 // ── SHARE TARGET HANDLER ──
